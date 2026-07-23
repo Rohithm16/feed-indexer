@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings — Feed Indexer</title>
+  <meta name="description" content="Configure your preferred topics, trusted publishers, and location." />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<header class="header">
+  <a href="index.html" class="header__logo">
+    <div class="header__logo-icon">◈</div>
+    Feed Indexer
+  </a>
+  <div class="header__spacer"></div>
+  <nav class="header__nav">
+    <a href="index.html" class="header__nav-link">Feed</a>
+    <a href="settings.html" class="header__nav-link active">Settings</a>
+  </nav>
+</header>
+
+<!-- ── Settings Page ──────────────────────────────────────────────────── -->
+<main class="settings-page">
+
+  <h1 class="settings-title">Preferences</h1>
+  <p class="settings-subtitle">
+    Personalize your feed. Critical events (wars, disasters, major legislation)
+    always appear at the top regardless of your preferences.
+  </p>
+
+  <!-- Topics -->
+  <section class="settings-section">
+    <div class="settings-section__title">Preferred Topics</div>
+    <p class="text-sm text-secondary" style="margin-bottom: 16px;">
+      Events in these categories will be boosted in your feed.
+    </p>
+    <div class="pill-group" id="topic-pills">
+      <!-- Rendered by settings.js -->
+    </div>
+  </section>
+
+  <!-- Publishers -->
+  <section class="settings-section">
+    <div class="settings-section__title">Trusted Publishers</div>
+    <p class="text-sm text-secondary" style="margin-bottom: 16px;">
+      Events covered by these publishers will be prioritized.
+    </p>
+    <div class="pill-group" id="publisher-pills">
+      <!-- Rendered by settings.js -->
+    </div>
+  </section>
+
+  <!-- Location -->
+  <section class="settings-section">
+    <div class="settings-section__title">Location</div>
+    <p class="text-sm text-secondary" style="margin-bottom: 16px;">
+      Used to surface local and national news relevant to you.
+    </p>
+
+    <div class="form-group">
+      <label class="form-label" for="input-country">Country code</label>
+      <input
+        class="form-input"
+        type="text"
+        id="input-country"
+        placeholder="us"
+        maxlength="10"
+        style="max-width: 200px;"
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="input-state">State / Province (optional)</label>
+      <input
+        class="form-input"
+        type="text"
+        id="input-state"
+        placeholder="California"
+        style="max-width: 300px;"
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="input-city">City (optional)</label>
+      <input
+        class="form-input"
+        type="text"
+        id="input-city"
+        placeholder="San Francisco"
+        style="max-width: 300px;"
+      />
+    </div>
+  </section>
+
+  <!-- Save button -->
+  <button class="btn-save" id="btn-save" type="button">Save Preferences</button>
+
+</main>
+
+<!-- Toast notification -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/settings.js"></script>
+</body>
+</html>
