@@ -18,8 +18,6 @@ import logging
 import types
 from typing import Optional
 
-#import google.generativeai as genai
-
 from app.config import settings
 from app.models.article import Article
 
