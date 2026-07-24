@@ -20,6 +20,8 @@ from app.scheduler import start_scheduler, stop_scheduler
 from app.api import events, feeds, prefs
 from app.ingestion.pipeline import run_ingestion
 
+
+
 # Basic logging config — shows timestamps and log levels
 logging.basicConfig(
     level=logging.INFO,
@@ -59,6 +61,7 @@ app.add_middleware(
     allow_origins=["*"],   # tighten this in production
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 # ── Register routers ─────────────────────────────────────────────────────────
