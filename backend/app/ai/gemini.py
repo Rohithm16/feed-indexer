@@ -9,7 +9,7 @@ Takes a list of articles from a clustered event and asks Gemini to generate:
 - A critical flag (wars, disasters, major legislation, etc.)
 - Category and tags
 
-We use gemini-2.5-flash for speed and low cost.
+We use gemini-3.5-flash-lite for speed and low cost.
 The response is strict JSON — no markdown wrappers.
 """
 
@@ -33,7 +33,7 @@ for model in client.models.list():
     print(model.name)
 
 # response = client.models.generate_content(
-#     model="gemini-2.5-flash",
+#     model="gemini-3.5-flash-lite",
 #     contents="Hello, Gemini! Can you summarize the latest news articles for me?"
 # )
 
@@ -41,7 +41,7 @@ for model in client.models.list():
 
 # # Configure the Gemini client once at module load
 # genai.configure(api_key=settings.gemini_api_key)
-# _model = genai.GenerativeModel("gemini-2.5-flash")
+# _model = genai.GenerativeModel("gemini-3.5-flash-lite")
 
 # Categories Gemini can assign
 VALID_CATEGORIES = {
