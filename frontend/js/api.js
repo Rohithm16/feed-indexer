@@ -5,7 +5,7 @@
  * The BASE_URL is the only thing you need to change if you deploy elsewhere.
  */
 
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "https://feed-indexer.onrender.com";
 
 /**
  * Generic fetch wrapper. Throws an Error with a readable message on failure.
