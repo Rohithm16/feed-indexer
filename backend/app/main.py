@@ -22,6 +22,7 @@ from app.ingestion.pipeline import run_ingestion
 
 
 
+
 # Basic logging config — shows timestamps and log levels
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +69,13 @@ app.add_middleware(
 app.include_router(events.router)
 app.include_router(feeds.router)
 app.include_router(prefs.router)
+
+
+@app.head("/")
+@app.get("/")
+def read_root():
+    """Root endpoint to handle UptimeRobot HEAD requests and keep the server awake."""
+    return {"status": "alive"}
 
 
 @app.get("/api/health")
