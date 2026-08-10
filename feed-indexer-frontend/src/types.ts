@@ -1,3 +1,14 @@
+export interface Article {
+  id: number;
+  title: string;
+  description: string | null;
+  url: string;
+  published_at: string | null;
+  source_name: string;
+  category: string | null;
+  country: string | null;
+}
+
 export interface Event {
   id: number;
   title: string;
@@ -10,6 +21,10 @@ export interface Event {
   primary_source_url: string | null;
   why_it_matters: string | null;
   last_updated_at: string;
+}
+
+export interface EventDetailData extends Event {
+  articles: Article[];
 }
 
 export interface FeedData {
@@ -28,7 +43,6 @@ export interface UserPreferences {
   country: string;
   state: string;
   city: string;
-  show_minor_news: boolean;
 }
 
 export const DEFAULT_PREFS: UserPreferences = {
@@ -37,7 +51,6 @@ export const DEFAULT_PREFS: UserPreferences = {
   country: 'us',
   state: '',
   city: '',
-  show_minor_news: false,
 };
 
 export interface ApiError {

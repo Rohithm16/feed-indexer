@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import * as Switch from '@radix-ui/react-switch';
 import { X } from 'lucide-react';
 import { getPreferences, updatePreferences } from '../api';
 import { DEFAULT_PREFS, type UserPreferences } from '../types';
@@ -34,9 +33,8 @@ const Settings: React.FC<Props> = ({ onClose, onSave }) => {
           country: data.country || 'us',
           state: data.state || '',
           city: data.city || '',
-          show_minor_news: data.show_minor_news || false,
         });
-      } catch (err) {
+      } catch {
         setToast('Failed to load preferences.');
       } finally {
         setLoading(false);
@@ -70,7 +68,7 @@ const Settings: React.FC<Props> = ({ onClose, onSave }) => {
       setToast('Preferences saved!');
       onSave();
       setTimeout(() => setToast(null), 3000);
-    } catch (err) {
+    } catch {
       setToast('Failed to save preferences.');
     } finally {
       setSaving(false);
@@ -160,43 +158,6 @@ const Settings: React.FC<Props> = ({ onClose, onSave }) => {
             onChange={(e) => setPrefs({ ...prefs, city: e.target.value })}
             style={{ flex: 1, minWidth: 120 }}
           />
-        </div>
-      </div>
-
-      <div className="settings-group">
-        <label>Show Minor News</label>
-        <div className="hint">
-          Events with very low importance (score ≤ 0) are hidden by default.
-        </div>
-        <div className="switch-row">
-          <Switch.Root
-            checked={prefs.show_minor_news}
-            onCheckedChange={(checked) =>
-              setPrefs({ ...prefs, show_minor_news: checked })
-            }
-            style={{
-              width: 42,
-              height: 24,
-              borderRadius: 12,
-              background: prefs.show_minor_news ? 'var(--color-accent)' : 'var(--color-border)',
-              border: 'none',
-              cursor: 'pointer',
-              position: 'relative',
-            }}
-          >
-            <Switch.Thumb
-              style={{
-                display: 'block',
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                background: '#fff',
-                transition: 'transform 0.2s',
-                transform: prefs.show_minor_news ? 'translateX(18px)' : 'translateX(2px)',
-              }}
-            />
-          </Switch.Root>
-          <label>{prefs.show_minor_news ? 'On' : 'Off'}</label>
         </div>
       </div>
 

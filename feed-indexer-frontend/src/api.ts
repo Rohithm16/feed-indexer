@@ -1,9 +1,10 @@
-import type { FeedData, UserPreferences } from './types.ts';
+import type { EventDetailData, FeedData, UserPreferences } from './types.ts';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
@@ -14,13 +15,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export function getFeed(country?: string): Promise<FeedData> {
-  const url = country ? `/api/events/?country=${country}` : '/api/events/';
-  return request<FeedData>(url);
+export function getFeed(): Promise<FeedData> {
+  return request<FeedData>('/api/events/');
 }
 
-export function triggerIngest(): Promise<void> {
-  return request<void>('/api/ingest', { method: 'POST' });
+export function getEventDetail(eventId: number): Promise<EventDetailData> {
+  return request<EventDetailData>(`/api/events/${eventId}`);
 }
 
 export function getPreferences(): Promise<UserPreferences> {
@@ -32,4 +32,26 @@ export function updatePreferences(prefs: UserPreferences): Promise<UserPreferenc
     method: 'PUT',
     body: JSON.stringify(prefs),
   });
+}
+
+export function registerUser(email: string, password: string): Promise<{ id: number; email: string }> {
+  return request<{ id: number; email: string }>('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function loginUser(email: string, password: string): Promise<{ id: number; email: string }> {
+  return request<{ id: number; email: string }>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function logoutUser(): Promise<void> {
+  return request<void>('/api/auth/logout', { method: 'POST' });
+}
+
+export function getCurrentUser(): Promise<{ id: number; email: string } | null> {
+  return request<{ id: number; email: string }>('/api/auth/me').catch(() => null);
 }

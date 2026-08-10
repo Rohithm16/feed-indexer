@@ -1,23 +1,13 @@
-"""
-Deduplicator — groups articles about the same story into Events.
+"""Event clustering with simple lexical + signal-based matching."""
 
-Algorithm:
-1. For each new article, build a text representation (title + description).
-2. Compare it against recent events using TF-IDF cosine similarity.
-3. If similarity > threshold (default 0.35), attach the article to that event.
-4. Otherwise, create a new event for the article.
-
-This is intentionally simple and readable. For a larger dataset you'd
-move to a proper embedding model (e.g. sentence-transformers), but TF-IDF
-works well for news headlines at MVP scale.
-"""
+from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import Optional
+import re
+from collections import Counter
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -27,8 +17,11 @@ from app.models.event import Event
 logger = logging.getLogger(__name__)
 
 
-def _build_text(title: str, description: Optional[str]) -> str:
-    """Combine title and description into a single string for vectorization."""
+def _normalize_words(text: str) -> set[str]:
+    return {token for token in re.findall(r"[a-z0-9]+", text.lower()) if len(token) > 2}
+
+
+def _build_text(title: str, description: str | None) -> str:
     parts = [title]
     if description:
         parts.append(description)
@@ -36,84 +29,75 @@ def _build_text(title: str, description: Optional[str]) -> str:
 
 
 def _get_recent_events(db: Session) -> list[Event]:
-    """
-    Load events from the last N hours.
-    We only cluster against recent events to avoid false positives
-    between old and new stories on similar topics.
-    """
-    cutoff = datetime.utcnow() - timedelta(hours=settings.dedup_window_hours)
-    return (
-        db.query(Event)
-        .filter(Event.first_seen_at >= cutoff)
-        .all()
-    )
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.dedup_window_hours)
+    return db.query(Event).filter(Event.first_seen_at >= cutoff).all()
 
 
-def find_matching_event(
-    article: Article,
-    recent_events: list[Event],
-    threshold: float,
-) -> Optional[Event]:
-    """
-    Find an existing event that this article belongs to.
-    Returns the best matching event, or None if no match above threshold.
-    """
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _agreement_score(article: Article, event: Event) -> tuple[float, bool]:
+    if not event.title and not event.summary:
+        return 0.0, False
+
+    article_text = _build_text(article.title, article.description)
+    event_text = _build_text(event.title or "", event.summary or "")
+    article_words = _normalize_words(article_text)
+    event_words = _normalize_words(event_text)
+
+    common = article_words & event_words
+    overlap = len(common) / max(1, len(article_words | event_words))
+    title_overlap = 1.0 if article.title and event.title and article.title.lower() in event.title.lower() else 0.0
+    category_match = bool(article.category and event.category and article.category == event.category)
+    recency = 1.0
+    article_time = _normalize_datetime(article.published_at)
+    event_time = _normalize_datetime(event.last_updated_at)
+    if article_time and event_time:
+        age = abs((article_time - event_time).total_seconds()) / 3600
+        recency = max(0.0, 1.0 - min(age / 24.0, 1.0))
+
+    score = overlap * 0.6 + title_overlap * 0.2 + recency * 0.1 + (0.1 if category_match else 0.0)
+    return score, category_match
+
+
+def find_matching_event(article: Article, recent_events: list[Event], threshold: float) -> Event | None:
     if not recent_events:
         return None
 
-    article_text = _build_text(article.title, article.description)
+    best_event: Event | None = None
+    best_score = 0.0
+    for event in recent_events:
+        score, _ = _agreement_score(article, event)
+        if score > best_score:
+            best_score = score
+            best_event = event
 
-    # Build corpus: article text + each event's title
-    event_texts = [
-        _build_text(e.title or "", e.summary or "")
-        for e in recent_events
-    ]
-    corpus = [article_text] + event_texts
-
-    # Vectorize and compute similarities
-    try:
-        vectorizer = TfidfVectorizer(stop_words="english", max_features=500)
-        tfidf_matrix = vectorizer.fit_transform(corpus)
-        # Compare article (row 0) against all events (rows 1+)
-        similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
-    except ValueError:
-        # Can happen if all texts are empty after stop-word removal
-        return None
-
-    best_idx = int(similarities.argmax())
-    best_score = float(similarities[best_idx])
-
-    if best_score >= threshold:
-        logger.debug(
-            f"Matched '{article.title[:60]}' → event {recent_events[best_idx].id} "
-            f"(similarity={best_score:.2f})"
-        )
-        return recent_events[best_idx]
-
+    if best_event and best_score >= threshold:
+        logger.debug("Matched %s to event %s with score %.2f", article.title[:60], best_event.id, best_score)
+        return best_event
     return None
 
 
 def get_or_create_event(article: Article, db: Session) -> Event:
-    """
-    Main entry point for deduplication.
-    Given an article, either find its event or create a new one.
-    """
     recent_events = _get_recent_events(db)
     match = find_matching_event(article, recent_events, settings.similarity_threshold)
 
     if match:
-        # Update timestamp so this event bubbles up in recency sorting
-        match.last_updated_at = datetime.utcnow()
+        match.last_updated_at = datetime.now(timezone.utc)
         return match
 
-    # No match — create a fresh event seeded with basic info from the article
     new_event = Event(
-        title=article.title,           # will be replaced by Gemini analysis
+        title=article.title,
         category=article.category,
         country=article.country,
-        first_seen_at=datetime.utcnow(),
-        last_updated_at=datetime.utcnow(),
+        first_seen_at=datetime.now(timezone.utc),
+        last_updated_at=datetime.now(timezone.utc),
     )
     db.add(new_event)
-    db.flush()  # get the new event ID without committing
+    db.flush()
     return new_event

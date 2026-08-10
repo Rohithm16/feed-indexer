@@ -11,14 +11,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function importanceLabel(score: number): string {
-  if (score >= 85) return 'Critical';
-  if (score >= 65) return 'Major';
-  if (score >= 45) return 'Notable';
-  if (score >= 25) return 'Moderate';
-  return 'Minor';
-}
-
 function badgeClass(score: number): string {
   if (score >= 65) return 'badge--high';
   if (score >= 35) return 'badge--mid';
@@ -46,9 +38,7 @@ const EventCard: React.FC<Props> = ({ event, onClick }) => {
       <div className="event-card__meta">
         {isCritical && <span className="badge badge--critical">⚠ Breaking</span>}
         <span>{event.category || 'General'}</span>
-        <span className={`badge ${badgeClass(score)}`}>
-          {importanceLabel(score)} · {Math.round(score)}
-        </span>
+        <span className={`badge ${badgeClass(score)}`}>{Math.round(score)}</span>
         <span>{timeAgo(event.last_updated_at)}</span>
       </div>
 

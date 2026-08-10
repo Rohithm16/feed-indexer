@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { Event } from '../types';
+import { getEventDetail } from '../api';
+import type { Event, EventDetailData } from '../types';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -20,15 +21,49 @@ interface Props {
 }
 
 const EventDetailModal: React.FC<Props> = ({ event, open, onClose }) => {
+  const [detail, setDetail] = useState<EventDetailData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !event) {
+      setDetail(null);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    getEventDetail(event.id)
+      .then((data) => {
+        if (!cancelled) setDetail(data);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Unable to load the full source list right now.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.id, open]);
+
   if (!event) return null;
 
+  const activeEvent = (detail ?? { ...event, articles: [] }) as EventDetailData;
+  const articles = activeEvent.articles ?? [];
+
   return (
-    <Dialog.Root open={open} onOpenChange={onClose}>
+    <Dialog.Root open={open} onOpenChange={() => onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="settings-overlay" />
         <Dialog.Content className="settings-content" style={{ maxWidth: 700 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{event.title}</h2>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{activeEvent.title}</h2>
             <Dialog.Close asChild>
               <button
                 style={{
@@ -46,12 +81,12 @@ const EventDetailModal: React.FC<Props> = ({ event, open, onClose }) => {
           </div>
 
           <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-            <span>{event.category || 'General'}</span>
+            <span>{activeEvent.category || 'General'}</span>
             <span style={{ margin: '0 0.5rem' }}>·</span>
-            <span>Importance: {Math.round(event.importance_score ?? 0)}</span>
+            <span>Importance: {Math.round(activeEvent.importance_score ?? 0)}</span>
             <span style={{ margin: '0 0.5rem' }}>·</span>
-            <span>{timeAgo(event.last_updated_at)}</span>
-            {event.is_critical && (
+            <span>{timeAgo(activeEvent.last_updated_at)}</span>
+            {activeEvent.is_critical && (
               <>
                 <span style={{ margin: '0 0.5rem' }}>·</span>
                 <span style={{ color: 'var(--color-critical)', fontWeight: 600 }}>⚠ Breaking</span>
@@ -59,31 +94,41 @@ const EventDetailModal: React.FC<Props> = ({ event, open, onClose }) => {
             )}
           </div>
 
-          {event.summary && (
+          {activeEvent.summary && (
             <div style={{ marginBottom: '1rem' }}>
               <h4 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Summary</h4>
-              <p style={{ lineHeight: 1.7 }}>{event.summary}</p>
+              <p style={{ lineHeight: 1.7 }}>{activeEvent.summary}</p>
             </div>
           )}
 
-          {event.why_it_matters && (
+          {activeEvent.why_it_matters && (
             <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)' }}>
               <h4 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Why it matters</h4>
-              <p style={{ lineHeight: 1.7 }}>{event.why_it_matters}</p>
+              <p style={{ lineHeight: 1.7 }}>{activeEvent.why_it_matters}</p>
             </div>
           )}
 
           <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
             <p>
-              <strong>Sources:</strong> {event.source_count ?? 0}
-              {event.primary_source_name && ` (via ${event.primary_source_name})`}
+              <strong>Sources:</strong> {activeEvent.source_count ?? 0}
+              {activeEvent.primary_source_name && ` (via ${activeEvent.primary_source_name})`}
             </p>
-            {event.primary_source_url && (
-              <p>
-                <a href={event.primary_source_url} target="_blank" rel="noopener noreferrer">
-                  Read original article ↗
-                </a>
-              </p>
+            {loading && <p style={{ marginTop: '0.5rem' }}>Loading linked sources…</p>}
+            {error && <p style={{ marginTop: '0.5rem', color: 'var(--color-critical)' }}>{error}</p>}
+            {!loading && !error && articles.length > 0 && (
+              <ul className="source-list" style={{ marginTop: '0.75rem' }}>
+                {articles.map((article) => (
+                  <li key={article.id}>
+                    <a href={article.url} target="_blank" rel="noopener noreferrer">
+                      {article.title || article.source_name}
+                    </a>
+                    <span> — {article.source_name}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!loading && !error && articles.length === 0 && (
+              <p style={{ marginTop: '0.5rem' }}>No linked sources available yet.</p>
             )}
           </div>
 

@@ -1,36 +1,39 @@
-"""
-Article model — represents a single piece of content from an RSS feed.
-Each article belongs to an Event (after deduplication/clustering).
+"""Article model.
+
+An Article is one publisher's RSS entry. Articles are preserved even when only
+a representative subset is sent to Gemini.
 """
 
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+from app.utils.time import utcnow_naive
 
 
 class Article(Base):
     __tablename__ = "articles"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    # The event this article was clustered into (set after deduplication)
     event_id = Column(Integer, ForeignKey("events.id"), nullable=True, index=True)
 
-    # Core content
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
+
+    # url is the original external link. normalized_url is used for uniqueness.
     url = Column(String(1000), unique=True, nullable=False, index=True)
-    published_at = Column(DateTime, nullable=True)
+    normalized_url = Column(String(1000), unique=True, nullable=True, index=True)
+    published_at = Column(DateTime, nullable=True, index=True)
 
-    # Where it came from
-    source_name = Column(String(200), nullable=False)   # e.g. "BBC World Service"
-    source_url = Column(String(500), nullable=True)     # feed URL
-    category = Column(String(100), nullable=True)       # e.g. "technology"
-    country = Column(String(50), nullable=True)         # e.g. "uk", "us", "world"
+    source_name = Column(String(200), nullable=False)
+    source_url = Column(String(500), nullable=True)
+    publisher_domain = Column(String(255), nullable=True)
+    source_tier = Column(Integer, default=2)
+    category = Column(String(100), nullable=True)
+    country = Column(String(50), nullable=True)
+    region = Column(String(100), nullable=True)
+    language = Column(String(20), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow_naive)
 
-    # Back-reference to the parent event
     event = relationship("Event", back_populates="articles")
