@@ -3,7 +3,7 @@ UserPreferences model — stores a single user's topic and publisher preferences
 For the MVP there's just one preference row (single-user mode).
 """
 
-from sqlalchemy import Column, Integer, String, JSON
+from sqlalchemy import Column, Integer, String, JSON, Boolean
 
 from app.database import Base
 
@@ -23,3 +23,4 @@ class UserPreferences(Base):
     country = Column(String(100), default="us")
     state = Column(String(100), nullable=True)
     city = Column(String(100), nullable=True)
+    # show_minor_news = Column(Boolean, default=False)

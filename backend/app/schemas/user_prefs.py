@@ -13,7 +13,7 @@ class PreferencesIn(BaseModel):
     country: str = "us"
     state: Optional[str] = None
     city: Optional[str] = None
-
+    # show_minor_news: Optional[bool] = False
 
 class PreferencesOut(PreferencesIn):
     """Response when fetching preferences."""
