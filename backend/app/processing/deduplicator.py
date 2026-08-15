@@ -1,13 +1,45 @@
-"""Event clustering with simple lexical + signal-based matching."""
+"""Event clustering with embedding cosine similarity + lexical/entity signals.
+
+Adds to the previous lexical-only version:
+- Semantic matching via embeddings + cosine similarity, so paraphrased
+  coverage of the same story ("wildfire forces evacuations" vs "blaze
+  prompts residents to flee") matches even with near-zero word overlap.
+- A cheap fast-path for near-identical titles (wire-service syndication),
+  so you don't spend an embedding call on the easy cases.
+- pgvector-backed candidate retrieval: instead of pulling every event in
+  the dedup window into Python and scoring all of them, we ask Postgres
+  for the K nearest events by embedding cosine distance directly. This is
+  both faster and more accurate than the old category-only prefilter,
+  since it can find true matches even when category tagging is wrong.
+- Graceful degradation: if the embedding call fails (rate limit, API
+  outage), scoring falls back to the lexical/entity/title signals only,
+  with weights renormalized rather than silently zeroing out 40% of the
+  score.
+
+Embeddings are computed locally with sentence-transformers
+(all-MiniLM-L6-v2, 384 dims) -- no API key, no network call, no rate
+limits. Well suited to short text like headlines/descriptions.
+
+Schema requirement: this assumes `Event.embedding` is a pgvector `Vector`
+column and `Event.article_count` is an int column used to maintain a
+running average embedding as more articles are merged in. Add a migration
+for these if they don't exist yet:
+
+    from pgvector.sqlalchemy import Vector
+    embedding = Column(Vector(384), nullable=True)
+    article_count = Column(Integer, nullable=False, default=1)
+
+And enable the extension once: `CREATE EXTENSION IF NOT EXISTS vector;`
+"""
 
 from __future__ import annotations
 
 import logging
+import math
 import re
-from collections import Counter
 from datetime import UTC, datetime, timedelta, timezone
-from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -16,9 +48,44 @@ from app.models.event import Event
 
 logger = logging.getLogger(__name__)
 
+_STOPWORDS = {
+    "the", "and", "for", "was", "were", "with", "from", "have", "has",
+    "had", "this", "that", "these", "those", "said", "says", "after",
+    "before", "would", "could", "should", "also", "more", "than", "into",
+    "over", "under", "about", "amid", "amidst", "its", "his", "her",
+    "their", "them", "they", "you", "your", "our", "who", "what", "when",
+    "where", "why", "how", "will", "can", "may", "not", "but", "are",
+    "been", "being", "new", "now", "one", "two", "per", "via", "off",
+    "out", "all", "any", "some", "such", "each", "other", "then",
+    "there", "here", "just", "still", "yet", "amp", "according",
+    "report", "reports", "reported", "news", "day", "week", "year",
+    "month", "latest", "top", "breaking",
+}
+
+_SUFFIX_RE = re.compile(r"(ing|edly|ed|es|s)$")
+
+_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+_EMBEDDING_DIM = 384
+_CANDIDATE_LIMIT = 20  # how many nearest-by-embedding events to score in detail
+
+
+def _stem(token: str) -> str:
+    if len(token) > 5:
+        stripped = _SUFFIX_RE.sub("", token)
+        if len(stripped) >= 3:
+            return stripped
+    return token
+
 
 def _normalize_words(text: str) -> set[str]:
-    return {token for token in re.findall(r"[a-z0-9]+", text.lower()) if len(token) > 2}
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    return {_stem(t) for t in tokens if len(t) > 2 and t not in _STOPWORDS}
+
+
+def _extract_entities(text: str) -> set[str]:
+    text = re.sub(r"(^|[.!?]\s+)([A-Z])", lambda m: m.group(1) + m.group(2).lower(), text)
+    runs = re.findall(r"\b[A-Z][a-zA-Z.]*(?:\s+[A-Z][a-zA-Z.]*)*\b", text)
+    return {r.strip().lower() for r in runs if len(r.strip()) > 2 and r.strip().lower() not in _STOPWORDS}
 
 
 def _build_text(title: str, description: str | None) -> str:
@@ -28,9 +95,12 @@ def _build_text(title: str, description: str | None) -> str:
     return " ".join(parts)
 
 
-def _get_recent_events(db: Session) -> list[Event]:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.dedup_window_hours)
-    return db.query(Event).filter(Event.first_seen_at >= cutoff).all()
+def _normalize_title_key(title: str) -> str:
+    """Aggressively normalized title for fast-path exact/near-exact matching
+    (catches syndicated wire copy where outlets run the identical headline).
+    """
+    words = sorted(_normalize_words(title))
+    return " ".join(words)
 
 
 def _normalize_datetime(value: datetime | None) -> datetime | None:
@@ -41,38 +111,191 @@ def _normalize_datetime(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC)
 
 
-def _agreement_score(article: Article, event: Event) -> tuple[float, bool]:
+# --------------------------------------------------------------------------
+# Embeddings
+# --------------------------------------------------------------------------
+
+_embedding_model = None
+
+
+def _get_model():
+    """Lazily load the local embedding model once per process.
+
+    all-MiniLM-L6-v2: 384 dims, ~80MB, runs fine on CPU, well suited to
+    short text (headlines/descriptions) -- no API key, no network call,
+    no rate limits. First call downloads and caches the model weights
+    (~90MB) to the local sentence-transformers cache dir; subsequent
+    calls just load from disk.
+    """
+    global _embedding_model
+    if _embedding_model is None:
+        from sentence_transformers import SentenceTransformer
+
+        _embedding_model = SentenceTransformer(_EMBEDDING_MODEL)
+    return _embedding_model
+
+
+def get_embedding(text: str) -> list[float] | None:
+    """Compute an embedding for the given text using a local model."""
+    if not text or not text.strip():
+        return None
+    try:
+        model = _get_model()
+        vector = model.encode(text[:8000], normalize_embeddings=True)
+        return vector.tolist()
+    except Exception:
+        logger.warning("Local embedding failed, falling back to lexical-only scoring", exc_info=True)
+        return None
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _average_embedding(existing: list[float] | None, existing_count: int, new: list[float]) -> list[float]:
+    """Running average so an event's embedding stays representative as more
+    articles merge into it, without needing to re-embed the whole cluster.
+    """
+    if not existing or existing_count <= 0:
+        return new
+    total = existing_count + 1
+    return [(e * existing_count + n) / total for e, n in zip(existing, new)]
+
+
+# --------------------------------------------------------------------------
+# Candidate retrieval
+# --------------------------------------------------------------------------
+
+def _get_candidate_events(db: Session, embedding: list[float] | None, category: str | None) -> list[Event]:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.dedup_window_hours)
+
+    if embedding is not None:
+        # Nearest-by-cosine-distance candidates straight from Postgres via
+        # pgvector, rather than pulling the whole window into Python.
+        query = (
+            select(Event)
+            .filter(Event.first_seen_at >= cutoff)
+            .filter(Event.embedding.isnot(None))
+            .order_by(Event.embedding.cosine_distance(embedding))
+            .limit(_CANDIDATE_LIMIT)
+        )
+        candidates = list(db.execute(query).scalars().all())
+        if candidates:
+            return candidates
+        logger.debug("No embedding-indexed candidates found, falling back to category scan")
+
+    # Fallback: embedding unavailable, or no events have embeddings yet
+    # (e.g. right after the migration). Scope by category if we have one
+    # to avoid a full unfiltered window scan.
+    query = db.query(Event).filter(Event.first_seen_at >= cutoff)
+    if category:
+        query = query.filter(Event.category == category)
+    return query.all()
+
+
+# --------------------------------------------------------------------------
+# Scoring
+# --------------------------------------------------------------------------
+
+def _agreement_score(
+    article: Article,
+    event: Event,
+    article_embedding: list[float] | None,
+) -> float:
     if not event.title and not event.summary:
-        return 0.0, False
+        return 0.0
 
     article_text = _build_text(article.title, article.description)
     event_text = _build_text(event.title or "", event.summary or "")
+
     article_words = _normalize_words(article_text)
     event_words = _normalize_words(event_text)
+    word_overlap = len(article_words & event_words) / max(1, len(article_words | event_words))
 
-    common = article_words & event_words
-    overlap = len(common) / max(1, len(article_words | event_words))
-    title_overlap = 1.0 if article.title and event.title and article.title.lower() in event.title.lower() else 0.0
-    category_match = bool(article.category and event.category and article.category == event.category)
+    article_title_words = _normalize_words(article.title or "")
+    event_title_words = _normalize_words(event.title or "")
+    title_overlap = len(article_title_words & event_title_words) / max(
+        1, len(article_title_words | event_title_words)
+    )
+
+    article_entities = _extract_entities(article_text)
+    event_entities = _extract_entities(event_text)
+    if article_entities or event_entities:
+        entity_overlap = len(article_entities & event_entities) / max(
+            1, len(article_entities | event_entities)
+        )
+    else:
+        entity_overlap = 0.0
+
     recency = 1.0
     article_time = _normalize_datetime(article.published_at)
     event_time = _normalize_datetime(event.last_updated_at)
     if article_time and event_time:
-        age = abs((article_time - event_time).total_seconds()) / 3600
-        recency = max(0.0, 1.0 - min(age / 24.0, 1.0))
+        age_hours = abs((article_time - event_time).total_seconds()) / 3600
+        recency = max(0.0, 1.0 - min(age_hours / 24.0, 1.0))
 
-    score = overlap * 0.6 + title_overlap * 0.2 + recency * 0.1 + (0.1 if category_match else 0.0)
-    return score, category_match
+    category_match = bool(article.category and event.category and article.category == event.category)
+
+    cosine_sim = None
+    if article_embedding is not None and getattr(event, "embedding", None) is not None:
+        cosine_sim = _cosine_similarity(article_embedding, list(event.embedding))
+
+    if cosine_sim is not None:
+        score = (
+            cosine_sim * 0.40
+            + entity_overlap * 0.20
+            + word_overlap * 0.15
+            + title_overlap * 0.10
+            + recency * 0.10
+            + (0.05 if category_match else 0.0)
+        )
+    else:
+        # No embedding available for this pair -- renormalize weights over
+        # the remaining signals instead of just losing 40% of the score.
+        score = (
+            entity_overlap * 0.34
+            + word_overlap * 0.25
+            + title_overlap * 0.17
+            + recency * 0.16
+            + (0.08 if category_match else 0.0)
+        )
+
+    if article.category and event.category and article.category != event.category:
+        score *= 0.35
+    if article.country and event.country and article.country != event.country:
+        score *= 0.3
+
+    return score
 
 
-def find_matching_event(article: Article, recent_events: list[Event], threshold: float) -> Event | None:
-    if not recent_events:
+def find_matching_event(
+    article: Article,
+    candidate_events: list[Event],
+    threshold: float,
+    article_embedding: list[float] | None,
+) -> Event | None:
+    if not candidate_events:
         return None
+
+    # Fast path: near-identical normalized title (syndicated wire copy).
+    article_key = _normalize_title_key(article.title or "")
+    if article_key:
+        for event in candidate_events:
+            if article_key == _normalize_title_key(event.title or ""):
+                logger.debug("Fast-path exact-title match: %s -> event %s", article.title[:60], event.id)
+                return event
 
     best_event: Event | None = None
     best_score = 0.0
-    for event in recent_events:
-        score, _ = _agreement_score(article, event)
+    for event in candidate_events:
+        score = _agreement_score(article, event, article_embedding)
         if score > best_score:
             best_score = score
             best_event = event
@@ -84,11 +307,18 @@ def find_matching_event(article: Article, recent_events: list[Event], threshold:
 
 
 def get_or_create_event(article: Article, db: Session) -> Event:
-    recent_events = _get_recent_events(db)
-    match = find_matching_event(article, recent_events, settings.similarity_threshold)
+    article_text = _build_text(article.title, article.description or "")
+    article_embedding = get_embedding(article_text)
+
+    candidates = _get_candidate_events(db, article_embedding, category=article.category)
+    match = find_matching_event(article, candidates, settings.similarity_threshold, article_embedding)
 
     if match:
         match.last_updated_at = datetime.now(timezone.utc)
+        if article_embedding is not None:
+            existing = list(match.embedding) if getattr(match, "embedding", None) is not None else None
+            match.embedding = _average_embedding(existing, match.article_count or 1, article_embedding)
+            match.article_count = (match.article_count or 1) + 1
         return match
 
     new_event = Event(
@@ -97,6 +327,8 @@ def get_or_create_event(article: Article, db: Session) -> Event:
         country=article.country,
         first_seen_at=datetime.now(timezone.utc),
         last_updated_at=datetime.now(timezone.utc),
+        embedding=article_embedding,
+        article_count=1,
     )
     db.add(new_event)
     db.flush()

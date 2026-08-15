@@ -1,5 +1,5 @@
-import React from 'react';
 import type { Event } from '../types';
+import styles from '../styles/EventCard.module.css';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -32,30 +32,30 @@ const EventCard: React.FC<Props> = ({ event, onClick }) => {
 
   return (
     <div
-      className={`event-card ${isCritical ? 'event-card--critical' : ''}`}
+      className={`${styles.card} ${isCritical ? styles.critical : ''}`}
       onClick={handleClick}
     >
-      <div className="event-card__meta">
+      <div className={styles.meta}>
         {isCritical && <span className="badge badge--critical">⚠ Breaking</span>}
         <span>{event.category || 'General'}</span>
         <span className={`badge ${badgeClass(score)}`}>{Math.round(score)}</span>
         <span>{timeAgo(event.last_updated_at)}</span>
       </div>
 
-      <h3 className="event-card__title">{event.title}</h3>
+      <h3 className={styles.title}>{event.title}</h3>
 
       {event.summary && (
-        <p className="event-card__summary">{event.summary}</p>
+        <p className={styles.summary}>{event.summary}</p>
       )}
 
       {event.why_it_matters && (
-        <div className="event-card__why">
+        <div className={styles.why}>
           <span style={{ fontWeight: 600, fontStyle: 'normal' }}>Why it matters </span>
           {event.why_it_matters}
         </div>
       )}
 
-      <div className="event-card__footer">
+      <div className={styles.footer}>
         <span>{event.source_count ?? 0} source{event.source_count !== 1 ? 's' : ''}</span>
         {event.primary_source_name && <span>via {event.primary_source_name}</span>}
         {event.primary_source_url && (

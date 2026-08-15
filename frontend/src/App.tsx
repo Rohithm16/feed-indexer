@@ -4,6 +4,7 @@ import type { FeedData, Event } from './types';
 import Header from './components/Header';
 import Section from './components/Section';
 import EventDetailModal from './components/EventDetailModal';
+import styles from './styles/App.module.css';
 import { useTimeOfDay } from './hooks/useTimeOfDay';
 import { getTimePeriodLabel } from './utils/timeOfDay';
 
@@ -38,7 +39,13 @@ function App() {
   }, []);
 
   useEffect(() => {
-    void loadFeed();
+    const timer = window.setTimeout(() => {
+      void loadFeed();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [loadFeed]);
 
   const handleIngest = async () => {
@@ -49,33 +56,33 @@ function App() {
   const closeEvent = () => setSelectedEvent(null);
 
   return (
-    <div className="app-shell">
+    <div className={styles.shell}>
       <Header onIngest={handleIngest} ingesting={loading} />
-      <main className="page-wrapper">
-        <section className="hero-panel" data-time={timePeriod}>
-          <div className="hero-panel__content">
-            <p className="hero-panel__title">{getTimePeriodLabel(timePeriod)} · Today’s overview</p>
-            <h1 className="hero-panel__headline">Stories grouped by importance, location, and topic.</h1>
-            <p className="hero-panel__description">
-              Breaking events stay prominent while local and sector sections keep the surrounding context visible.
+      <main className={styles.page}>
+        <section className={styles.hero} data-time={timePeriod}>
+          <div className={styles.content}>
+            <p className={styles.title}>Updated x minutes ago. </p>
+            <h1 className={styles.headline}>{getTimePeriodLabel(timePeriod)}</h1>
+            <p className={styles.description}>
+              Stories grouped by importance, location, and topic. 
             </p>
           </div>
-          <div className="hero-panel__stats">
-            <div className="hero-panel__stat">
-              <div className="hero-panel__count">{feed ? Object.values(feed).flat().length : 0}</div>
-              <div className="hero-panel__stat-label">events tracked</div>
+          <div className={styles.stats}>
+            <div className={styles.stat}>
+              <div className={styles.count}>{feed ? Object.values(feed).flat().length : 0}</div>
+              <div className={styles.label}>events tracked</div>
             </div>
-            <div className="hero-panel__stat">
-              <div className="hero-panel__count">{feed ? feed.critical.length : 0}</div>
-              <div className="hero-panel__stat-label">critical stories</div>
+            <div className={styles.stat}>
+              <div className={styles.count}>{feed ? feed.critical.length : 0}</div>
+              <div className={styles.label}>critical stories</div>
             </div>
           </div>
         </section>
 
-        {loading && <p className="status-text">Loading feed…</p>}
-        {error && <p className="status-text status-text--error">Error: {error}</p>}
+        {loading && <p className={styles.status}>Loading feed…</p>}
+        {error && <p className={`${styles.status} ${styles.error}`}>Error: {error}</p>}
         {!loading && !error && !feed && (
-          <div className="empty-state">
+          <div className={styles.empty}>
             <p>No events yet.</p>
             <p style={{ marginTop: 'var(--space-2)' }}>Refresh to pull the latest stories.</p>
           </div>

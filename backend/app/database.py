@@ -11,12 +11,13 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-connect_args = {}
-if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-
-engine = create_engine(settings.database_url, connect_args=connect_args)
+engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Dimension of the local sentence-transformers embedding used for event
+# dedup (all-MiniLM-L6-v2). Keep in sync with deduplication.py's
+# _EMBEDDING_DIM and the Column(EmbeddingType(...)) definition on Event.
+EMBEDDING_DIM = 384
 
 
 class Base(DeclarativeBase):
@@ -38,8 +39,19 @@ def _column_names(table_name: str) -> set[str]:
     return {column["name"] for column in inspector.get_columns(table_name)}
 
 
-def _json_type() -> str:
-    return "TEXT" if engine.dialect.name == "sqlite" else "JSON"
+def _ensure_pgvector_extension() -> None:
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    except Exception as exc:
+        logger.warning(
+            "Could not create pgvector extension (%s). Embedding-based "
+            "dedup candidate retrieval will fail until this is enabled -- "
+            "typically requires a superuser role or a managed-Postgres "
+            "add-on (e.g. Supabase/RDS both support pgvector but you may "
+            "need to enable it from their dashboard rather than SQL).",
+            exc,
+        )
 
 
 def _add_missing_columns(table_name: str, columns: dict[str, str]) -> None:
@@ -65,6 +77,8 @@ def _create_index(statement: str) -> None:
 
 def run_lightweight_migrations() -> None:
     """Patch existing MVP databases without requiring Alembic for this project."""
+    _ensure_pgvector_extension()
+
     _add_missing_columns(
         "articles",
         {
@@ -80,12 +94,14 @@ def run_lightweight_migrations() -> None:
         {
             "event_type": "VARCHAR(100)",
             "scope": "VARCHAR(50)",
-            "scoring_debug": _json_type(),
+            "scoring_debug": "JSON",
             "source_quality_score": "FLOAT DEFAULT 0",
             "publisher_count": "INTEGER DEFAULT 0",
-            "summary_generated_at": "DATETIME",
+            "summary_generated_at": "TIMESTAMP",
             "summary_version": "INTEGER DEFAULT 1",
             "last_summarized_event_state": "VARCHAR(128)",
+            "embedding": f"vector({EMBEDDING_DIM})",
+            "article_count": "INTEGER DEFAULT 1",
         },
     )
     _add_missing_columns("user_preferences", {"user_id": "INTEGER"})
@@ -97,17 +113,18 @@ def run_lightweight_migrations() -> None:
     _create_index("CREATE INDEX IF NOT EXISTS ix_events_importance_score ON events (importance_score)")
     _create_index("CREATE INDEX IF NOT EXISTS ix_users_email ON users (email)")
     _create_index("CREATE INDEX IF NOT EXISTS ix_user_preferences_user_id ON user_preferences (user_id)")
-
-    if engine.dialect.name == "sqlite":
-        _create_index(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ux_articles_normalized_url "
-            "ON articles (normalized_url) WHERE normalized_url IS NOT NULL"
-        )
-    else:
-        _create_index(
-            "CREATE UNIQUE INDEX IF NOT EXISTS ux_articles_normalized_url "
-            "ON articles (normalized_url) WHERE normalized_url IS NOT NULL"
-        )
+    _create_index(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_articles_normalized_url "
+        "ON articles (normalized_url) WHERE normalized_url IS NOT NULL"
+    )
+    # ANN index for embedding cosine search. Safe to create on an empty or
+    # small table -- pgvector just won't get much benefit from it until
+    # there's enough data. If the extension isn't enabled yet this is
+    # caught and skipped by _create_index rather than blowing up startup.
+    _create_index(
+        "CREATE INDEX IF NOT EXISTS ix_events_embedding_cosine "
+        "ON events USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+    )
 
 
 def init_db() -> None:

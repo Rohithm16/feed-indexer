@@ -1,0 +1,165 @@
+.shell {
+  min-height: 100vh;
+}
+
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-10);
+}
+
+.hero {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--spacing-xl);
+  padding: calc(var(--spacing-xl) * 1.5);
+  border-radius: var(--radius-round);
+  margin-bottom: var(--space-8);
+  overflow: hidden;
+  isolation: isolate;
+  transition: background 1.2s ease;
+}
+
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hero::before {
+  opacity: 0.85;
+  transition: opacity 1.2s ease;
+}
+
+.content,
+.stats {
+  position: relative;
+  z-index: 1;
+}
+
+.content {
+  flex: 1.4;
+}
+
+.title {
+  color: #fff;
+  font-weight: 100;
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  margin-bottom: var(--spacing-sm);
+}
+
+.headline {
+  color: #fff;
+  font-size: clamp(1.25rem, 2.2vw, 1.65rem);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--spacing-xs);
+}
+
+.description {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  max-width: 52ch;
+}
+
+.stats {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+}
+
+.stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.stat + .stat {
+  padding-left: var(--spacing-xl);
+  margin-left: var(--spacing-xl);
+  border-left: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.count {
+  color: #fff;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 700;
+  margin-bottom: var(--spacing-md);
+  font-family: 'Outfit', var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: var(--text-sm);
+  text-transform: lowercase;
+}
+
+.status {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-round);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+}
+
+.error {
+  color: var(--color-critical);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.hero[data-time='night'] {
+  background: linear-gradient(-60deg, #0b0d19 0%, #17152b 16%, #28213e 30%, #443653 42%, #62506c 50%, #6f5a76 56%, #4a3a59 68%, #27203b 82%, #0b0c18 100%);
+}
+
+.hero[data-time='night']::before {
+  background: linear-gradient(-60deg, transparent 0%, rgba(120, 100, 155, 0.04) 15%, rgba(150, 130, 180, 0.09) 30%, rgba(190, 175, 220, 0.16) 42%, rgba(210, 195, 235, 0.20) 50%, rgba(190, 175, 220, 0.16) 58%, rgba(150, 130, 180, 0.09) 70%, rgba(120, 100, 155, 0.04) 85%, transparent 100%);
+}
+
+.hero[data-time='night']::after {
+  background: linear-gradient(180deg, rgba(5, 7, 17, 0.20) 0%, transparent 34%, transparent 68%, rgba(5, 7, 17, 0.30) 100%), linear-gradient(90deg, rgba(35, 25, 65, 0.16) 0%, transparent 28%, transparent 72%, rgba(25, 24, 55, 0.20) 100%);
+}
+
+.hero[data-time='sunrise'] {
+  background: linear-gradient(-60deg, #3d6a9e 0%, #6b96c8 15%, #e8a06a 45%, #f5c98a 55%, #7aabda 85%, #4a7eb5 100%);
+}
+
+.hero[data-time='sunrise']::before {
+  background: linear-gradient(-60deg, transparent 0%, rgba(255, 190, 100, 0.05) 20%, rgba(255, 200, 115, 0.14) 35%, rgba(255, 210, 130, 0.26) 45%, rgba(255, 215, 140, 0.30) 50%, rgba(255, 210, 130, 0.26) 55%, rgba(255, 200, 115, 0.14) 65%, rgba(255, 190, 100, 0.05) 80%, transparent 100%);
+}
+
+.hero[data-time='sunrise']::after {
+  background: linear-gradient(90deg, rgba(61, 106, 158, 0.25) 0%, transparent 30%, transparent 70%, rgba(74, 126, 181, 0.25) 100%);
+}
+
+.hero[data-time='sunset'] {
+  background: linear-gradient(-60deg, #3a5f8a 0%, #5a82b0 14%, #d4784a 42%, #f0a060 52%, #c96a48 62%, #6898c8 86%, #3d6a9e 100%);
+}
+
+.hero[data-time='sunset']::before {
+  background: linear-gradient(-60deg, transparent 0%, rgba(240, 140, 70, 0.05) 20%, rgba(250, 155, 80, 0.14) 35%, rgba(255, 170, 95, 0.26) 45%, rgba(255, 178, 105, 0.30) 50%, rgba(255, 170, 95, 0.26) 55%, rgba(250, 155, 80, 0.14) 65%, rgba(240, 140, 70, 0.05) 80%, transparent 100%);
+}
+
+.hero[data-time='sunset']::after {
+  background: linear-gradient(90deg, rgba(58, 95, 138, 0.24) 0%, transparent 30%, transparent 70%, rgba(61, 110, 158, 0.20) 100%);
+}

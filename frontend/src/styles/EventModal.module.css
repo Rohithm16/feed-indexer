@@ -1,0 +1,185 @@
+.modal {
+  outline: none;
+  max-width: 720px;
+  width: 92%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18), 0 8px 24px rgba(0, 0, 0, 0.10);
+}
+
+.header {
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  border-bottom: none;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.header[data-time='night'] {
+  background: linear-gradient(-60deg, #0b0d19 0%, #17152b 16%, #28213e 30%, #443653 42%, #62506c 50%, #6f5a76 56%, #4a3a59 68%, #27203b 82%, #0b0c18 100%);
+}
+
+.header[data-time='sunrise'] {
+  background: linear-gradient(-60deg, #3d6a9e 0%, #6b96c8 15%, #e8a06a 45%, #f5c98a 55%, #7aabda 85%, #4a7eb5 100%);
+}
+
+.header[data-time='sunset'] {
+  background: linear-gradient(-60deg, #3a5f8a 0%, #5a82b0 14%, #d4784a 42%, #f0a060 52%, #c96a48 62%, #6898c8 86%, #3d6a9e 100%);
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: white;
+  flex: 1;
+}
+
+.body {
+  padding: var(--space-5) var(--space-6);
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  background: rgba(255, 255, 255, 0.50);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  max-height: 70vh;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sectionCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-7);
+  letter-spacing: 0;
+  text-transform: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.text {
+  font-size: var(--text-sm);
+  line-height: 1.75;
+  color: var(--color-text-primary);
+}
+
+.highlight {
+  padding: var(--space-4);
+  background: rgba(255, 255, 255, 0.34);
+  border-radius: var(--radius-round);
+  border-left: 3px solid var(--blue-6);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.highlight .sectionTitle {
+  color: var(--blue-7);
+}
+
+.sourceLead {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.status {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-critical);
+}
+
+.sourceList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sourceList li {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-round);
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 100ms ease, box-shadow 100ms ease, background 100ms ease;
+}
+
+.sourceList li:hover {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(34, 139, 230, 0.45);
+  box-shadow: 0 2px 8px rgba(34, 139, 230, 0.08);
+}
+
+.sourceList a {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: 4px;
+  color: var(--color-text-primary);
+}
+
+.sourceList a:hover {
+  color: var(--blue-6);
+}
+
+.publisher {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+
+@media (max-width: 720px) {
+  .modal {
+    width: 96%;
+    max-height: 92vh;
+  }
+
+  .header,
+  .body,
+  .footer {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+}
