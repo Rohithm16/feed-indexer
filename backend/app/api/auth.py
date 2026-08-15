@@ -70,6 +70,7 @@ def _ensure_preferences(db: Session, user: User) -> UserPreferences:
         preferred_topics=[],
         trusted_publishers=[],
         country="us",
+        city=None,
     )
     db.add(prefs)
     db.flush()

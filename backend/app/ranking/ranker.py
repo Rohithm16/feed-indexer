@@ -1,36 +1,36 @@
-""" Ranker — scores and sorts events for the homepage feed. """
-from typing import Optional
+"""Ranker — scores and sorts events for the homepage feed."""
 from app.models.event import Event
 from app.models.user_prefs import UserPreferences
 
 
-def _compute_user_interest_score(
-    event: Event, prefs: Optional[UserPreferences],
-) -> tuple[float, str]:
-    """Returns (bonus_score, reason_string)."""
+def _compute_user_interest_score(event: Event, prefs: UserPreferences | None) -> tuple[float, str]:
+    """Return a personalization bonus and a human-readable explanation."""
     if not prefs:
         return 0.0, "High importance"
 
     bonus = 0.0
-    reasons = []
+    reasons: list[str] = []
 
-    # Category match
     if event.category and event.category in (prefs.preferred_topics or []):
-        bonus += 20
+        bonus += 18.0
         reasons.append(f"Matches your interest in {event.category}")
 
-    # Trusted publisher
     article_sources = {a.source_name for a in (event.articles or [])}
     trusted = set(prefs.trusted_publishers or [])
     matching_sources = article_sources & trusted
     if matching_sources:
-        bonus += 10
-        reasons.append(f"Trusted source: {', '.join(matching_sources)}")
+        bonus += 12.0
+        reasons.append(f"Trusted source: {', '.join(sorted(matching_sources))}")
 
-    # Country match (fixed: only if both are non‑null and equal)
-    if prefs.country and event.country and event.country == prefs.country:
-        bonus += 15
-        reasons.append("Local to your region")
+    if prefs.city and event.country and event.country == prefs.country:
+        event_title = (event.title or "").lower()
+        city_name = prefs.city.lower()
+        if city_name in event_title:
+            bonus += 22.0
+            reasons.append(f"Local to {prefs.city}")
+        elif event.category in {"national", "politics"}:
+            bonus += 8.0
+            reasons.append("Relevant to your country")
 
     if not reasons:
         importance = event.importance_score or 0
@@ -46,10 +46,10 @@ def _compute_user_interest_score(
 
 def rank_events(
     events: list[Event],
-    prefs: Optional[UserPreferences] = None,
+    prefs: UserPreferences | None = None,
 ) -> list[tuple[Event, str]]:
-    """Score and sort events. Critical events are excluded here."""
-    scored = []
+    """Score and sort events by objective importance plus personalization."""
+    scored: list[tuple[float, str, Event]] = []
     for event in events:
         if event.is_critical:
             continue
@@ -63,12 +63,12 @@ def rank_events(
 
 def section_events(
     events: list[Event],
-    prefs: Optional[UserPreferences] = None,
+    prefs: UserPreferences | None = None,
 ) -> dict:
     """
     Divide events into sections.
-    - Minor news (importance_score ≤ 0) are filtered out unless show_minor_news is True.
-    - Local section only shows events whose country matches the user's country.
+    - Minor news with negligible importance is filtered out.
+    - Local section prioritizes city-level matches when a city is configured.
     """
     sections: dict[str, list] = {
         "critical": [],
@@ -81,12 +81,10 @@ def section_events(
     }
 
     user_country = prefs.country if prefs else None
-    # show_minor = prefs.show_minor_news if prefs else False
+    user_city = (prefs.city or "").strip().lower() if prefs else ""
 
     for event in events:
-        # ---- Filter minor news ----
-        if (event.importance_score or 0) <= 0: 
-        # and not show_minor:
+        if (event.importance_score or 0) <= 0:
             continue
 
         # ---- Critical ----
@@ -98,13 +96,11 @@ def section_events(
         _, reason = _compute_user_interest_score(event, prefs)
         category = (event.category or "world").lower()
 
-        # ---- Local: only if country matches exactly ----
-        if (
-            user_country
-            and event.country
-            and event.country == user_country
-            and category in ("national", "politics")
-        ):
+        is_city_match = bool(user_city and user_city in (event.title or "").lower())
+        is_same_country = bool(user_country and event.country and event.country == user_country)
+        is_local_match = is_same_country and is_city_match
+
+        if is_local_match:
             sections["local"].append((event, reason))
 
         # ---- National ----
@@ -132,9 +128,9 @@ def section_events(
             sections["world"].append((event, reason))
 
     # Sort each section by importance
-    for key in sections:
-        sections[key].sort(
-            key=lambda pair: pair[0].importance_score or 0,
+    for key, section in sections.items():
+        section.sort(
+            key=lambda pair: ((pair[0].importance_score or 0) + _compute_user_interest_score(pair[0], prefs)[0]),
             reverse=True,
         )
 

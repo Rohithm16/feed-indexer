@@ -26,7 +26,7 @@ def _get_preferences(db: Session, user: User | None) -> UserPreferences | None:
         return None
     if user.preferences:
         return user.preferences
-    prefs = UserPreferences(user_id=user.id, preferred_topics=[], trusted_publishers=[], country="us")
+    prefs = UserPreferences(user_id=user.id, preferred_topics=[], trusted_publishers=[], country="us", city=None)
     db.add(prefs)
     db.flush()
     return prefs

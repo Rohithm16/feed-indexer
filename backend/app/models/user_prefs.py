@@ -15,7 +15,6 @@ class UserPreferences(Base):
     preferred_topics = Column(JSON, default=list)
     trusted_publishers = Column(JSON, default=list)
     country = Column(String(100), default="us")
-    state = Column(String(100), nullable=True)
     city = Column(String(100), nullable=True)
 
     user = relationship("User", back_populates="preferences")

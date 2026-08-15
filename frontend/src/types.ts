@@ -41,7 +41,6 @@ export interface UserPreferences {
   preferred_topics: string[];
   trusted_publishers: string[];
   country: string;
-  state: string;
   city: string;
 }
 
@@ -49,7 +48,6 @@ export const DEFAULT_PREFS: UserPreferences = {
   preferred_topics: [],
   trusted_publishers: [],
   country: 'us',
-  state: '',
   city: '',
 };
 

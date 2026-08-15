@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from app.config import settings
@@ -54,7 +53,6 @@ HIGH_IMPACT_TERMS = {
     "flood",
     "earthquake",
     "wildfire",
-    "earthquake",
     "pandemic",
     "outbreak",
     "bank",
@@ -195,9 +193,9 @@ def score_event(event: Event, articles: list[Article] | None = None) -> tuple[fl
     if not article_list:
         return 0.0, {"reasons": ["No articles available"]}
 
-    combined_text = " ".join(
-        filter(None, [article.title, article.description or "", event.title or "", event.summary or ""])
-    )
+    article_text_parts = [article.title or "" for article in article_list]
+    article_text_parts.extend(article.description or "" for article in article_list)
+    combined_text = " ".join(filter(None, [*article_text_parts, event.title or "", event.summary or ""]))
     lowered = _normalize_text(combined_text)
     numbers = _extract_numbers(combined_text)
 

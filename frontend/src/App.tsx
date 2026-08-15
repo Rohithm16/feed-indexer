@@ -4,6 +4,8 @@ import type { FeedData, Event } from './types';
 import Header from './components/Header';
 import Section from './components/Section';
 import EventDetailModal from './components/EventDetailModal';
+import { useTimeOfDay } from './hooks/useTimeOfDay';
+import { getTimePeriodLabel } from './utils/timeOfDay';
 
 const SECTIONS: Array<{ key: keyof FeedData; label: string }> = [
   { key: 'critical', label: 'Breaking & Critical' },
@@ -20,6 +22,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const timePeriod = useTimeOfDay();
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -49,22 +52,22 @@ function App() {
     <div className="app-shell">
       <Header onIngest={handleIngest} ingesting={loading} />
       <main className="page-wrapper">
-        <section className="hero-panel">
-          <div>
-            <p className="hero-panel__eyebrow">Today’s overview</p>
-            <h1>Stories grouped by importance, location, and topic.</h1>
-            <p>
+        <section className="hero-panel" data-time={timePeriod}>
+          <div className="hero-panel__content">
+            <p className="hero-panel__title">{getTimePeriodLabel(timePeriod)} · Today’s overview</p>
+            <h1 className="hero-panel__headline">Stories grouped by importance, location, and topic.</h1>
+            <p className="hero-panel__description">
               Breaking events stay prominent while local and sector sections keep the surrounding context visible.
             </p>
           </div>
           <div className="hero-panel__stats">
-            <div>
-              <strong>{feed ? Object.values(feed).flat().length : 0}</strong>
-              <span>events tracked</span>
+            <div className="hero-panel__stat">
+              <div className="hero-panel__count">{feed ? Object.values(feed).flat().length : 0}</div>
+              <div className="hero-panel__stat-label">events tracked</div>
             </div>
-            <div>
-              <strong>{feed ? feed.critical.length : 0}</strong>
-              <span>critical stories</span>
+            <div className="hero-panel__stat">
+              <div className="hero-panel__count">{feed ? feed.critical.length : 0}</div>
+              <div className="hero-panel__stat-label">critical stories</div>
             </div>
           </div>
         </section>

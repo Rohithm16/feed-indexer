@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Settings as SettingsIcon, LogIn, LogOut } from 'lucide-react';
+import { RefreshCw, Settings as SettingsIcon, LogIn, LogOut, X } from 'lucide-react';
 import { getCurrentUser, loginUser, logoutUser, registerUser } from '../api';
+import { useTimeOfDay } from '../hooks/useTimeOfDay';
+import BrandTitle from './BrandTitle';
 import Settings from './Settings';
 
 interface Props {
@@ -17,6 +19,7 @@ const Header: React.FC<Props> = ({ onIngest, ingesting }) => {
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [user, setUser] = useState<{ id: number; email: string } | null>(null);
+  const timePeriod = useTimeOfDay();
 
   useEffect(() => {
     getCurrentUser().then(setUser).catch(() => setUser(null));
@@ -62,32 +65,28 @@ const Header: React.FC<Props> = ({ onIngest, ingesting }) => {
       <header className="header">
         <div className="header__inner">
           <div className="header__brand">
-            <div className="header__brand-badge">FI</div>
-            <div>
-              <div className="header__title">Feed Indexer</div>
-              <div className="header__subtitle">Live stories, grouped by relevance</div>
-            </div>
+            <BrandTitle className="header__title" />
           </div>
 
           <nav className="header__nav">
-            <button className="header__nav-link header__nav-link--action" onClick={onIngest} disabled={ingesting}>
-              <RefreshCw size={14} style={{ marginRight: 4 }} />
+            <button className="btn btn-light" onClick={onIngest} disabled={ingesting}>
+              <RefreshCw size={14} />
               {ingesting ? 'Refreshing…' : 'Refresh'}
             </button>
             {user ? (
               <>
-                <button className="header__nav-link" onClick={() => setSettingsOpen(true)}>
-                  <SettingsIcon size={16} style={{ marginRight: 4 }} />
+                <button className="btn btn-subtle" onClick={() => setSettingsOpen(true)}>
+                  <SettingsIcon size={16} />
                   Settings
                 </button>
-                <button className="header__nav-link" onClick={handleLogout}>
-                  <LogOut size={16} style={{ marginRight: 4 }} />
+                <button className="btn btn-subtle" onClick={handleLogout}>
+                  <LogOut size={16} />
                   Logout
                 </button>
               </>
             ) : (
-              <button className="header__nav-link" onClick={() => openAuth('login')}>
-                <LogIn size={16} style={{ marginRight: 4 }} />
+              <button className="btn btn-subtle" onClick={() => openAuth('login')}>
+                <LogIn size={16} />
                 Sign in
               </button>
             )}
@@ -108,34 +107,38 @@ const Header: React.FC<Props> = ({ onIngest, ingesting }) => {
         <>
           <div className="settings-overlay" onClick={() => setAuthOpen(false)} />
           <div className="settings-content auth-modal">
-            <div className="auth-modal__header">
-              <div>
-                <h2>{authMode === 'login' ? 'Sign in' : 'Create account'}</h2>
-                <p>Save your topics, publishers, and location preferences.</p>
-              </div>
-              <button className="btn-secondary" onClick={() => setAuthOpen(false)}>
-                Close
+            <div className="auth-modal__brand" data-time={timePeriod}>
+              <BrandTitle as="h1" className="auth-modal__brand-title" />
+              <p className="auth-modal__tagline">Stories grouped by relevance, for you</p>
+              <button className="btn btn-icon auth-modal__close" onClick={() => setAuthOpen(false)} aria-label="Close">
+                <X size={18} />
               </button>
             </div>
-            <form className="auth-form" onSubmit={handleAuthSubmit}>
-              <label>
-                Email
-                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-              </label>
-              <label>
-                Password
-                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-              </label>
-              {authMessage && <p className="auth-message">{authMessage}</p>}
-              <div className="auth-actions">
-                <button className="btn-primary" type="submit" disabled={authLoading}>
-                  {authLoading ? 'Working…' : authMode === 'login' ? 'Sign in' : 'Create account'}
-                </button>
-                <button className="btn-secondary" type="button" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
-                  {authMode === 'login' ? 'Need an account?' : 'Already have one?'}
-                </button>
+            <div className="auth-modal__body">
+              <div className="auth-modal__intro">
+                <h2>{authMode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
+                <p>Save topics, trusted publishers, and location preferences.</p>
               </div>
-            </form>
+              <form className="auth-form" onSubmit={handleAuthSubmit}>
+                <label>
+                  Email
+                  <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="you@example.com" />
+                </label>
+                <label>
+                  Password
+                  <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required placeholder="••••••••" />
+                </label>
+                {authMessage && <p className="auth-message">{authMessage}</p>}
+                <div className="auth-actions">
+                  <button className="btn btn-primary" type="submit" disabled={authLoading}>
+                    {authLoading ? 'Working…' : authMode === 'login' ? 'Sign in' : 'Create account'}
+                  </button>
+                  <button className="btn btn-secondary" type="button" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
+                    {authMode === 'login' ? 'Need an account?' : 'Already have one?'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </>
       )}

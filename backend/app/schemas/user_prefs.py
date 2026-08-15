@@ -1,7 +1,5 @@
 """Pydantic schemas for per-user preferences."""
 
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -9,8 +7,7 @@ class PreferencesIn(BaseModel):
     preferred_topics: list[str] = []
     trusted_publishers: list[str] = []
     country: str = "us"
-    state: Optional[str] = None
-    city: Optional[str] = None
+    city: str | None = None
 
 
 class PreferencesOut(PreferencesIn):
