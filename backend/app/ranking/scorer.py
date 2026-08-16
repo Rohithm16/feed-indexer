@@ -246,6 +246,24 @@ def _low_value_penalty(lowered: str) -> float:
     return 0.0
 
 
+def is_low_editorial_content(title: str, description: str | None = None) -> bool:
+    """Shared low-value/listicle/announcement/review detector.
+
+    Used both as an early skip in the ingestion pipeline (avoid spending a
+    dedup/embedding call on obvious junk) and implicitly by score_event's
+    own content-type gating. Keeping one definition means the pipeline's
+    early skip and the scorer's cap can't drift out of sync the way the
+    old pipeline._is_low_value keyword list did (it lacked review/listicle
+    pattern detection entirely, which is why "Top 5 tips for pregnancy"
+    and laptop review pieces were reaching the scorer at all).
+    """
+    combined = f"{title or ''} {description or ''}"
+    if _LISTICLE_RE.search(combined) or _ANNOUNCEMENT_RE.search(combined) or _REVIEW_RE.search(combined):
+        return True
+    lowered = _normalize_text(combined)
+    return bool(_LOW_VALUE_RE.search(lowered))
+
+
 def score_event(event: Event, articles: list[Article] | None = None) -> tuple[float, dict[str, Any]]:
     """Score an event at the event level using local deterministic signals."""
     article_list = articles or list(event.articles or [])

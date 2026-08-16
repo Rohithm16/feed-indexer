@@ -6,30 +6,23 @@ Adds to the previous lexical-only version:
   prompts residents to flee") matches even with near-zero word overlap.
 - A cheap fast-path for near-identical titles (wire-service syndication),
   so you don't spend an embedding call on the easy cases.
-- pgvector-backed candidate retrieval: instead of pulling every event in
-  the dedup window into Python and scoring all of them, we ask Postgres
-  for the K nearest events by embedding cosine distance directly. This is
-  both faster and more accurate than the old category-only prefilter,
-  since it can find true matches even when category tagging is wrong.
-- Graceful degradation: if the embedding call fails (rate limit, API
-  outage), scoring falls back to the lexical/entity/title signals only,
-  with weights renormalized rather than silently zeroing out 40% of the
-  score.
+- Graceful degradation: if the embedding call fails, scoring falls back
+  to the lexical/entity/title signals only, with weights renormalized
+  rather than silently zeroing out 40% of the score.
 
 Embeddings are computed locally with sentence-transformers
 (all-MiniLM-L6-v2, 384 dims) -- no API key, no network call, no rate
 limits. Well suited to short text like headlines/descriptions.
 
-Schema requirement: this assumes `Event.embedding` is a pgvector `Vector`
-column and `Event.article_count` is an int column used to maintain a
-running average embedding as more articles are merged in. Add a migration
-for these if they don't exist yet:
-
-    from pgvector.sqlalchemy import Vector
-    embedding = Column(Vector(384), nullable=True)
-    article_count = Column(Integer, nullable=False, default=1)
-
-And enable the extension once: `CREATE EXTENSION IF NOT EXISTS vector;`
+Storage: embeddings are stored as a plain JSON column (see
+app.models.types.EmbeddingType), not pgvector -- no Postgres extension
+required. Candidate retrieval is a category + time-window scan pulled
+into Python, then scored/compared there; at this project's scale that's
+simpler to run than an in-database ANN index and plenty fast. If the
+event volume ever grows large enough for the Python-side scan to become
+a bottleneck, switching Event.embedding to a pgvector column and adding
+an ORDER BY embedding <=> ... query in _get_candidate_events is the
+natural next step, but isn't needed yet.
 """
 
 from __future__ import annotations
@@ -39,7 +32,6 @@ import math
 import re
 from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -66,7 +58,6 @@ _SUFFIX_RE = re.compile(r"(ing|edly|ed|es|s)$")
 
 _EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 _EMBEDDING_DIM = 384
-_CANDIDATE_LIMIT = 20  # how many nearest-by-embedding events to score in detail
 
 
 def _stem(token: str) -> str:
@@ -174,26 +165,13 @@ def _average_embedding(existing: list[float] | None, existing_count: int, new: l
 # --------------------------------------------------------------------------
 
 def _get_candidate_events(db: Session, embedding: list[float] | None, category: str | None) -> list[Event]:
+    """Pull candidate events from the dedup window, scoped by category when
+    we have one to avoid a full unfiltered scan. The embedding itself isn't
+    used for retrieval (no ANN index without pgvector) -- it's passed
+    through to _agreement_score, where cosine similarity is computed in
+    plain Python against each candidate's stored embedding.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.dedup_window_hours)
-
-    if embedding is not None:
-        # Nearest-by-cosine-distance candidates straight from Postgres via
-        # pgvector, rather than pulling the whole window into Python.
-        query = (
-            select(Event)
-            .filter(Event.first_seen_at >= cutoff)
-            .filter(Event.embedding.isnot(None))
-            .order_by(Event.embedding.cosine_distance(embedding))
-            .limit(_CANDIDATE_LIMIT)
-        )
-        candidates = list(db.execute(query).scalars().all())
-        if candidates:
-            return candidates
-        logger.debug("No embedding-indexed candidates found, falling back to category scan")
-
-    # Fallback: embedding unavailable, or no events have embeddings yet
-    # (e.g. right after the migration). Scope by category if we have one
-    # to avoid a full unfiltered window scan.
     query = db.query(Event).filter(Event.first_seen_at >= cutoff)
     if category:
         query = query.filter(Event.category == category)

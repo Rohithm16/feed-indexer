@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -32,12 +31,28 @@ def _get_preferences(db: Session, user: User | None) -> UserPreferences | None:
     return prefs
 
 
-def _event_to_card(event: Event, reason: str = "") -> EventCard:
-    articles = sorted(
-        event.articles or [],
-        key=lambda a: (a.published_at or datetime.min.replace(tzinfo=UTC), a.source_tier or 2),
+def _primary_article(event: Event):
+    """Pick the representative article for an event's "Read original" link.
+
+    Best source tier first (tier 1 = most credible), then most recent
+    within that tier. Previously sorted oldest-first with tier as a
+    secondary key, so a slower tier-2 outlet that happened to publish
+    first would win over a tier-1 wire story published later the same day.
+    """
+    articles = event.articles or []
+    if not articles:
+        return None
+    return min(
+        articles,
+        key=lambda a: (
+            a.source_tier or 2,
+            -(a.published_at.timestamp() if a.published_at else 0),
+        ),
     )
-    primary = articles[0] if articles else None
+
+
+def _event_to_card(event: Event, reason: str = "") -> EventCard:
+    primary = _primary_article(event)
     return EventCard(
         id=event.id,
         title=event.title,
@@ -53,6 +68,30 @@ def _event_to_card(event: Event, reason: str = "") -> EventCard:
         recommendation_reason=reason,
         primary_source_name=primary.source_name if primary else None,
         primary_source_url=primary.url if primary else None,
+    )
+
+
+def _event_to_detail(event: Event, reason: str = "") -> EventDetail:
+    """Builds EventDetail directly, rather than constructing an EventCard
+    and re-parsing it through model_dump() just to add the articles field.
+    """
+    primary = _primary_article(event)
+    return EventDetail(
+        id=event.id,
+        title=event.title,
+        summary=event.summary,
+        why_it_matters=event.why_it_matters,
+        category=event.category,
+        tags=event.tags or [],
+        importance_score=event.importance_score or 0.0,
+        is_critical=event.is_critical or False,
+        source_count=len(event.articles or []),
+        first_seen_at=event.first_seen_at,
+        last_updated_at=event.last_updated_at,
+        recommendation_reason=reason,
+        primary_source_name=primary.source_name if primary else None,
+        primary_source_url=primary.url if primary else None,
+        articles=[ArticleOut.model_validate(a) for a in event.articles or []],
     )
 
 
@@ -87,5 +126,4 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db), user: User | 
     prefs = _get_preferences(db, user)
     from app.ranking.ranker import _compute_user_interest_score
     _, reason = _compute_user_interest_score(event, prefs)
-    card = _event_to_card(event, reason)
-    return EventDetail(**card.model_dump(), articles=[ArticleOut.model_validate(a) for a in event.articles or []])
+    return _event_to_detail(event, reason)

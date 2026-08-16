@@ -8,6 +8,7 @@ from sqlalchemy import Boolean, Column, DateTime, Float, Integer, JSON, String, 
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+from app.models.types import EmbeddingType
 from app.utils.time import utcnow_naive
 
 
@@ -32,6 +33,13 @@ class Event(Base):
     publisher_count = Column(Integer, default=0)
     is_critical = Column(Boolean, default=False)
     scoring_debug = Column(JSON, default=dict)
+
+    # Dedup: sentence-transformers embedding (all-MiniLM-L6-v2, 384 dims),
+    # stored as a plain JSON list of floats -- see app.models.types. Also a
+    # running count of merged articles, used to maintain the embedding as
+    # a running average as more articles join an event.
+    embedding = Column(EmbeddingType, nullable=True)
+    article_count = Column(Integer, nullable=False, default=1)
 
     # Gemini call minimization.
     summary_generated_at = Column(DateTime, nullable=True)

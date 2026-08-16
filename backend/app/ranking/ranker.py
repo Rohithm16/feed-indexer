@@ -51,13 +51,13 @@ def rank_events(
     """Score and sort events by objective importance plus personalization."""
     scored: list[tuple[float, str, Event]] = []
     for event in events:
-        if event.is_critical:
-            continue
         user_bonus, reason = _compute_user_interest_score(event, prefs)
+        if event.is_critical:
+            reason = "Critical event" if not reason else reason
         final_score = (event.importance_score or 0) + user_bonus
         scored.append((final_score, reason, event))
 
-    scored.sort(key=lambda x: x[0], reverse=True)
+    scored.sort(key=lambda x: (x[2].is_critical, x[0]), reverse=True)
     return [(event, reason) for _, reason, event in scored]
 
 

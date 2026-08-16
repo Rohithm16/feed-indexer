@@ -17,15 +17,13 @@ from app.ingestion.normalizer import normalize_feed_entries
 from app.models.article import Article
 from app.models.event import Event
 from app.processing.deduplicator import get_or_create_event
-from app.ranking.scorer import apply_scoring_to_event
+from app.ranking.scorer import apply_scoring_to_event, is_low_editorial_content
 
 logger = logging.getLogger(__name__)
 
 
 def _is_low_value(title: str, description: str | None) -> bool:
-    text = f"{title} {description or ''}".lower()
-    low_value_markers = ["recipe", "lifestyle", "celebrity", "gossip", "opinion", "listicle", "promo", "promotion", "travel"]
-    return any(marker in text for marker in low_value_markers)
+    return is_low_editorial_content(title, description)
 
 
 def _is_stale(article: Article) -> bool:

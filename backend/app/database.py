@@ -15,8 +15,12 @@ engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Dimension of the local sentence-transformers embedding used for event
-# dedup (all-MiniLM-L6-v2). Keep in sync with deduplication.py's
+# dedup (all-MiniLM-L6-v2). Keep in sync with deduplicator.py's
 # _EMBEDDING_DIM and the Column(EmbeddingType(...)) definition on Event.
+# Embeddings are stored as plain JSON (a list of floats), not pgvector --
+# no Postgres extension required. At this project's scale, candidate
+# retrieval does a full Python-side scan of the dedup window rather than
+# an in-database ANN search, which is simpler to run and fast enough here.
 EMBEDDING_DIM = 384
 
 
@@ -37,21 +41,6 @@ def _column_names(table_name: str) -> set[str]:
     if table_name not in inspector.get_table_names():
         return set()
     return {column["name"] for column in inspector.get_columns(table_name)}
-
-
-def _ensure_pgvector_extension() -> None:
-    try:
-        with engine.begin() as connection:
-            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    except Exception as exc:
-        logger.warning(
-            "Could not create pgvector extension (%s). Embedding-based "
-            "dedup candidate retrieval will fail until this is enabled -- "
-            "typically requires a superuser role or a managed-Postgres "
-            "add-on (e.g. Supabase/RDS both support pgvector but you may "
-            "need to enable it from their dashboard rather than SQL).",
-            exc,
-        )
 
 
 def _add_missing_columns(table_name: str, columns: dict[str, str]) -> None:
@@ -77,8 +66,6 @@ def _create_index(statement: str) -> None:
 
 def run_lightweight_migrations() -> None:
     """Patch existing MVP databases without requiring Alembic for this project."""
-    _ensure_pgvector_extension()
-
     _add_missing_columns(
         "articles",
         {
@@ -100,7 +87,7 @@ def run_lightweight_migrations() -> None:
             "summary_generated_at": "TIMESTAMP",
             "summary_version": "INTEGER DEFAULT 1",
             "last_summarized_event_state": "VARCHAR(128)",
-            "embedding": f"vector({EMBEDDING_DIM})",
+            "embedding": "JSON",
             "article_count": "INTEGER DEFAULT 1",
         },
     )
@@ -116,14 +103,6 @@ def run_lightweight_migrations() -> None:
     _create_index(
         "CREATE UNIQUE INDEX IF NOT EXISTS ux_articles_normalized_url "
         "ON articles (normalized_url) WHERE normalized_url IS NOT NULL"
-    )
-    # ANN index for embedding cosine search. Safe to create on an empty or
-    # small table -- pgvector just won't get much benefit from it until
-    # there's enough data. If the extension isn't enabled yet this is
-    # caught and skipped by _create_index rather than blowing up startup.
-    _create_index(
-        "CREATE INDEX IF NOT EXISTS ix_events_embedding_cosine "
-        "ON events USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
     )
 
 

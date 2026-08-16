@@ -15,31 +15,17 @@ The response is strict JSON — no markdown wrappers.
 
 import json
 import logging
-import types
 from typing import Optional
+
+from google import genai
+from google.genai import types
 
 from app.config import settings
 from app.models.article import Article
 
 logger = logging.getLogger(__name__)
 
-from google import genai
-from google.genai import types
-
 client = genai.Client(api_key=settings.gemini_api_key)
-for model in client.models.list():
-    print(model.name)
-
-# response = client.models.generate_content(
-#     model="gemini-3.5-flash-lite",
-#     contents="Hello, Gemini! Can you summarize the latest news articles for me?"
-# )
-
-# print(response.text)
-
-# # Configure the Gemini client once at module load
-# genai.configure(api_key=settings.gemini_api_key)
-# _model = genai.GenerativeModel("gemini-3.5-flash-lite")
 
 # Categories Gemini can assign
 VALID_CATEGORIES = {
@@ -110,10 +96,6 @@ def analyze_event(articles: list[Article]) -> Optional[dict]:
                 temperature=0.2
             ),
         )
-        # response = _model.generate_content(
-        #     prompt,
-        #     generation_config={"temperature": 0.2},  # low temp = more factual
-        # )
         if not response.text:
             logger.error("Gemini returned an empty response.")
             return None
@@ -147,13 +129,20 @@ def analyze_event(articles: list[Article]) -> Optional[dict]:
 
 def apply_analysis_to_event(event, analysis: dict) -> None:
     """
-    Write Gemini's analysis fields onto an Event model instance.
+    Write Gemini's language-generation fields onto an Event model instance.
+
+    Intentionally does NOT touch importance_score, is_critical, or category:
+    those are locally computed by app.ranking.scorer.apply_scoring_to_event
+    and must stay that way (see the "Gemini must not own these decisions"
+    comment on the Event model). Gemini is still asked to estimate these in
+    its own JSON output -- that's kept for now because reasoning about scale
+    of impact tends to make its title/summary/why_it_matters phrasing better
+    calibrated -- but the estimate itself is discarded here rather than
+    applied to the event.
+
     Modifies the event in-place; caller is responsible for committing.
     """
     event.title = analysis.get("title", event.title)
     event.summary = analysis.get("summary")
     event.why_it_matters = analysis.get("why_it_matters")
-    event.importance_score = float(analysis.get("importance_score", 0))
-    event.is_critical = bool(analysis.get("is_critical", False))
-    event.category = analysis.get("category", event.category)
     event.tags = analysis.get("tags", [])

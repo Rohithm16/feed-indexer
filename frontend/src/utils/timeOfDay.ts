@@ -1,7 +1,6 @@
 export type TimePeriod = 'night' | 'sunrise' | 'sunset';
 
-export function getTimePeriod(date = new Date()): TimePeriod {
-  return 'sunset';  
+export function getTimePeriod(date = new Date()): TimePeriod {  
   const hour = date.getHours();
   if (hour >= 20 || hour < 5) return 'night';
   if (hour >= 5 && hour < 15) return 'sunrise';
