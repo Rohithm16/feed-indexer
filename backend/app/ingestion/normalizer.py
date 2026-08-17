@@ -85,6 +85,7 @@ def normalize_entry(entry: dict[str, Any], feed: FeedInfo) -> Article | None:
         source_url=feed.url,
         category=feed.category,
         country=feed.country,
+        source_tier=feed.tier,
         publisher_domain=feed.url.split("//")[-1].split("/")[0] if feed.url else None,
     )
 

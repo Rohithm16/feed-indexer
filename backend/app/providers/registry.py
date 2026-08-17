@@ -10,9 +10,10 @@ from typing import List
 
 from app.providers.base import NewsProvider, FeedInfo
 from app.providers.feeds.bbc import BBCProvider
-from app.providers.feeds.reuters import ReutersProvider
 from app.providers.feeds.ap_news import APNewsProvider
-from app.providers.feeds.world import TheGuardianProvider, AlJazeeraProvider, NPRProvider
+from app.providers.feeds.world import TheGuardianProvider, NPRProvider
+from app.providers.feeds.india import TheHinduProvider, TimesOfIndiaProvider
+from app.providers.feeds.international import PBSNewsHourProvider, DWProvider
 from app.providers.feeds.technology import (
     ArsTechnicaProvider,
     HackerNewsProvider,
@@ -28,13 +29,23 @@ from app.providers.feeds.business_science import (
 )
 
 # ── Add new providers here ───────────────────────────────────────────────────
+# Reuters removed: feeds.reuters.com was discontinued by Reuters back in
+# 2020 and has returned 404s/redirects ever since -- these 4 feeds were
+# dead the entire time, silently failing on every ingestion run.
+# Al Jazeera removed: its only public feed is an unfiltered firehose
+# (sports, culture, opinion all mixed into "world" news) -- see the note
+# in providers/feeds/world.py.
+# PBS NewsHour and DW added to backfill the general-coverage gap left by
+# removing those two.
 PROVIDERS: List[NewsProvider] = [
     BBCProvider(),
-    ReutersProvider(),
     APNewsProvider(),
     TheGuardianProvider(),
-    AlJazeeraProvider(),
     NPRProvider(),
+    TheHinduProvider(),
+    TimesOfIndiaProvider(),
+    PBSNewsHourProvider(),
+    DWProvider(),
     ArsTechnicaProvider(),
     HackerNewsProvider(),
     TechCrunchProvider(),

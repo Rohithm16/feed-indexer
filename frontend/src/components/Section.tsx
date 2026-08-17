@@ -10,15 +10,7 @@ interface Props {
 
 const Section: React.FC<Props> = ({ title, events, onEventClick }) => {
   if (!events || events.length === 0) {
-    return (
-      <section className={styles.section}>
-        <div className={styles.header}>
-          <h2 className={styles.title}>{title}</h2>
-          <span className={styles.count}>0</span>
-        </div>
-        <div className="empty-state">No events in this section yet.</div>
-      </section>
-    );
+    return null;
   }
 
   return (

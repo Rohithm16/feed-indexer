@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.ai.gemini import analyze_event, apply_analysis_to_event
 from app.config import settings
 from app.database import SessionLocal
-from app.ingestion.cleanup import cleanup_stale_data
+from app.ingestion.cleanup import cleanup_stale_data, enforce_section_caps
 from app.ingestion.fetcher import fetch_all_feeds
 from app.ingestion.normalizer import normalize_feed_entries
 from app.models.article import Article
@@ -57,6 +57,7 @@ async def run_ingestion() -> dict:
         "new_events": 0,
         "merged_events": 0,
         "important_events": 0,
+        "events_evicted": 0,
         "gemini_calls": 0,
         "gemini_failures": 0,
     }
@@ -97,10 +98,8 @@ async def run_ingestion() -> dict:
                 article.event_id = event.id
                 db.add(article)
                 stats["new_articles"] += 1
-                if event.id and event.id not in {item.id for item in event.articles if item.id is not None}:  # pragma: no cover
-                    pass
 
-                if not event.articles or len(event.articles) <= 1:
+                if (event.article_count or 1) <= 1:
                     stats["new_events"] += 1
                 else:
                     stats["merged_events"] += 1
@@ -114,6 +113,19 @@ async def run_ingestion() -> dict:
             if not event:
                 continue
             apply_scoring_to_event(event, list(event.articles or []))
+            db.add(event)
+        db.commit()
+
+        stats["events_evicted"] = enforce_section_caps(db)
+        db.commit()
+
+        for event_id in changed_event_ids:
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if not event:
+                # Evicted by section-cap enforcement above -- skips the
+                # Gemini call entirely rather than analyzing an event that
+                # was just deleted for not making the cut.
+                continue
             if event.importance_score >= settings.gemini_min_importance_score:
                 stats["important_events"] += 1
                 state_hash = _event_state_hash(event)

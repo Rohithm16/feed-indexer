@@ -245,8 +245,15 @@ def _agreement_score(
             + (0.08 if category_match else 0.0)
         )
 
-    if article.category and event.category and article.category != event.category:
-        score *= 0.35
+    # Category is a static tag copied from whichever RSS feed the article
+    # came from (e.g. NPR's feed says "national", Al Jazeera's says
+    # "world" for the exact same earthquake) -- it's a source-labeling
+    # quirk, not a reliable signal that two articles describe different
+    # events. A hard penalty here was the confirmed cause of a real
+    # earthquake story failing to dedup: it dropped an otherwise-strong
+    # match below threshold purely because of inconsistent feed tagging.
+    # Country is more reliable (two stories about disasters in different
+    # countries really are different events), so that penalty stays.
     if article.country and event.country and article.country != event.country:
         score *= 0.3
 
@@ -293,10 +300,10 @@ def get_or_create_event(article: Article, db: Session) -> Event:
 
     if match:
         match.last_updated_at = datetime.now(timezone.utc)
+        match.article_count = (match.article_count or 1) + 1
         if article_embedding is not None:
             existing = list(match.embedding) if getattr(match, "embedding", None) is not None else None
-            match.embedding = _average_embedding(existing, match.article_count or 1, article_embedding)
-            match.article_count = (match.article_count or 1) + 1
+            match.embedding = _average_embedding(existing, (match.article_count or 2) - 1, article_embedding)
         return match
 
     new_event = Event(

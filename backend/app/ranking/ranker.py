@@ -1,6 +1,57 @@
 """Ranker — scores and sorts events for the homepage feed."""
+from app.constants import DEFAULT_COUNTRIES, SUPPORTED_COUNTRIES
 from app.models.event import Event
 from app.models.user_prefs import UserPreferences
+
+# Content-type routing for non-national events. Uses the scorer's
+# content-derived event_type, NOT event.category (which is just a static
+# tag copied from whichever RSS feed the article came from -- see the
+# "event.category bug" discussion). Tech and science are merged into one
+# section; finance/economy/corporate merge into business_finance; every
+# other event_type (disaster, conflict, election, health, law, diplomacy,
+# entertainment, sports, lifestyle, etc.) falls into world, which is the
+# intentional catch-all for everything that isn't specifically
+# tech/science, business/finance, or a national story.
+_TECH_SCIENCE_TYPES = {"technology", "science"}
+_BUSINESS_FINANCE_TYPES = {"finance", "economy", "corporate"}
+
+# Caps exist for three reasons: keeps the feed to genuinely important
+# stories instead of a long tail of 25-and-under noise, skips Gemini
+# calls for events that would just get evicted anyway, and keeps the DB
+# from accumulating events indefinitely. National is a per-country cap
+# (each selected country gets its own 6, not 6 shared across both).
+SECTION_CAPS = {
+    "national": 6,
+    "world": 10,
+    "tech_science": 6,
+    "business_finance": 6,
+}
+
+
+def classify_event_bucket(event: Event) -> str:
+    """Which section an event belongs to, independent of any particular
+    user's country selection -- "national:<code>" for any of the globally
+    supported countries, otherwise content-type routing. Used both by
+    section_events() below (per-request, filtered to a user's selected
+    countries) and by cleanup.enforce_section_caps (global storage-level
+    eviction, independent of any one user).
+    """
+    if event.country in SUPPORTED_COUNTRIES:
+        return f"national:{event.country}"
+    event_type = (event.event_type or "").lower()
+    if event_type in _TECH_SCIENCE_TYPES:
+        return "tech_science"
+    if event_type in _BUSINESS_FINANCE_TYPES:
+        return "business_finance"
+    return "world"
+
+
+def _selected_countries(prefs: UserPreferences | None) -> list[str]:
+    if prefs:
+        countries = [c for c in (getattr(prefs, "countries", None) or []) if c in SUPPORTED_COUNTRIES]
+        if countries:
+            return countries
+    return DEFAULT_COUNTRIES
 
 
 def _compute_user_interest_score(event: Event, prefs: UserPreferences | None) -> tuple[float, str]:
@@ -22,15 +73,9 @@ def _compute_user_interest_score(event: Event, prefs: UserPreferences | None) ->
         bonus += 12.0
         reasons.append(f"Trusted source: {', '.join(sorted(matching_sources))}")
 
-    if prefs.city and event.country and event.country == prefs.country:
-        event_title = (event.title or "").lower()
-        city_name = prefs.city.lower()
-        if city_name in event_title:
-            bonus += 22.0
-            reasons.append(f"Local to {prefs.city}")
-        elif event.category in {"national", "politics"}:
-            bonus += 8.0
-            reasons.append("Relevant to your country")
+    if event.country and event.country in _selected_countries(prefs):
+        bonus += 8.0
+        reasons.append("Relevant to your country")
 
     if not reasons:
         importance = event.importance_score or 0
@@ -66,72 +111,60 @@ def section_events(
     prefs: UserPreferences | None = None,
 ) -> dict:
     """
-    Divide events into sections.
-    - Minor news with negligible importance is filtered out.
-    - Local section prioritizes city-level matches when a city is configured.
-    """
-    sections: dict[str, list] = {
-        "critical": [],
-        "local": [],
-        "national": [],
-        "world": [],
-        "technology": [],
-        "business": [],
-        "science": [],
-    }
+    Divide events into sections and apply per-section importance caps.
 
-    user_country = prefs.country if prefs else None
-    user_city = (prefs.city or "").strip().lower() if prefs else ""
+    National takes priority over content-based routing: a technology
+    story out of a selected country lands in that country's National
+    sub-feed, not Tech & Science, even though its content type is
+    "technology". Only events NOT matching a selected country fall
+    through to content-based routing (tech_science / business_finance /
+    world catch-all).
+    """
+    selected_countries = _selected_countries(prefs)
+    sections: dict = {
+        "critical": [],
+        "national": {country: [] for country in selected_countries},
+        "world": [],
+        "tech_science": [],
+        "business_finance": [],
+    }
 
     for event in events:
         if (event.importance_score or 0) <= 0:
             continue
 
-        # ---- Critical ----
+        _, reason = _compute_user_interest_score(event, prefs)
+
         if event.is_critical:
-            _, reason = _compute_user_interest_score(event, prefs)
             sections["critical"].append((event, "Critical event"))
             continue
 
-        _, reason = _compute_user_interest_score(event, prefs)
-        category = (event.category or "world").lower()
+        if event.country in selected_countries:
+            sections["national"][event.country].append((event, reason))
+            continue
 
-        is_city_match = bool(user_city and user_city in (event.title or "").lower())
-        is_same_country = bool(user_country and event.country and event.country == user_country)
-        is_local_match = is_same_country and is_city_match
-
-        if is_local_match:
-            sections["local"].append((event, reason))
-
-        # ---- National ----
-        elif category == "national":
-            sections["national"].append((event, reason))
-
-        # ---- World ----
-        elif category in ("world", "politics"):
-            sections["world"].append((event, reason))
-
-        # ---- Technology ----
-        elif category == "technology":
-            sections["technology"].append((event, reason))
-
-        # ---- Business ----
-        elif category in ("business", "finance"):
-            sections["business"].append((event, reason))
-
-        # ---- Science ----
-        elif category in ("science", "health"):
-            sections["science"].append((event, reason))
-
-        # ---- Fallback ----
+        # Content-type routing for everything else, including events tied
+        # to a supported country the user just didn't select (e.g. an
+        # India tech story for a US-only user) -- falls through to
+        # Tech & Science / Business & Finance / World rather than
+        # disappearing entirely.
+        event_type = (event.event_type or "").lower()
+        if event_type in _TECH_SCIENCE_TYPES:
+            sections["tech_science"].append((event, reason))
+        elif event_type in _BUSINESS_FINANCE_TYPES:
+            sections["business_finance"].append((event, reason))
         else:
             sections["world"].append((event, reason))
 
-    # Sort each section by importance
-    for key, section in sections.items():
-        section.sort(
-            key=lambda pair: ((pair[0].importance_score or 0) + _compute_user_interest_score(pair[0], prefs)[0]),
-            reverse=True,
-        )
+    def _sorted_capped(pairs: list, cap: int) -> list:
+        pairs.sort(key=lambda pair: (pair[0].importance_score or 0), reverse=True)
+        return pairs[:cap]
+
+    sections["critical"].sort(key=lambda pair: (pair[0].importance_score or 0), reverse=True)
+    for country in list(sections["national"].keys()):
+        sections["national"][country] = _sorted_capped(sections["national"][country], SECTION_CAPS["national"])
+    sections["world"] = _sorted_capped(sections["world"], SECTION_CAPS["world"])
+    sections["tech_science"] = _sorted_capped(sections["tech_science"], SECTION_CAPS["tech_science"])
+    sections["business_finance"] = _sorted_capped(sections["business_finance"], SECTION_CAPS["business_finance"])
 
     return sections

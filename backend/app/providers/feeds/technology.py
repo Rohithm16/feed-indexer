@@ -15,6 +15,7 @@ class ArsTechnicaProvider(NewsProvider):
                 url="http://feeds.arstechnica.com/arstechnica/index",
                 category="technology",
                 country="world",
+                tier=2,
             ),
         ]
 
@@ -27,11 +28,17 @@ class HackerNewsProvider(NewsProvider):
     @property
     def feeds(self) -> List[FeedInfo]:
         return [
+            # Tier 3: crowd-voted link aggregator, not a newsroom. Real
+            # signal for tech-industry discussion but a different kind of
+            # source than the rest of this list -- kept lower tier so it
+            # doesn't get treated as equally authoritative as an outlet
+            # with actual reporters and editorial review.
             FeedInfo(
                 name="Hacker News Top",
                 url="https://hnrss.org/frontpage",
                 category="technology",
                 country="world",
+                tier=3,
             ),
         ]
 
@@ -49,6 +56,7 @@ class TechCrunchProvider(NewsProvider):
                 url="https://techcrunch.com/feed/",
                 category="technology",
                 country="world",
+                tier=2,
             ),
         ]
 
@@ -66,6 +74,7 @@ class WiredProvider(NewsProvider):
                 url="https://www.wired.com/feed/rss",
                 category="technology",
                 country="world",
+                tier=2,
             ),
         ]
 
@@ -83,5 +92,6 @@ class TheVergeProvider(NewsProvider):
                 url="https://www.theverge.com/rss/index.xml",
                 category="technology",
                 country="world",
+                tier=2,
             ),
         ]

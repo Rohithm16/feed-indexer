@@ -3,7 +3,7 @@ Pydantic schemas for Event API responses.
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Dict, Optional, List
 from pydantic import BaseModel
 
 from app.schemas.article import ArticleOut
@@ -19,6 +19,7 @@ class EventCard(BaseModel):
     summary: Optional[str] = None
     why_it_matters: Optional[str] = None
     category: Optional[str] = None
+    country: Optional[str] = None   # for flag display on national cards
     tags: Optional[List[str]] = []
     importance_score: float = 0.0
     is_critical: bool = False
@@ -46,13 +47,12 @@ class EventDetail(EventCard):
 class SectionedFeed(BaseModel):
     """
     The full homepage feed, organized into named sections.
-    Each section is a list of EventCard items.
-    Sections with no events are omitted from the response.
+    National is grouped by country code (e.g. "in", "us") since a user
+    can select one or both -- each gets its own capped sub-feed. All
+    other sections are flat, capped lists ordered by importance.
     """
     critical: List[EventCard] = []
-    local: List[EventCard] = []
-    national: List[EventCard] = []
+    national: Dict[str, List[EventCard]] = {}
     world: List[EventCard] = []
-    technology: List[EventCard] = []
-    business: List[EventCard] = []
-    science: List[EventCard] = []
+    tech_science: List[EventCard] = []
+    business_finance: List[EventCard] = []

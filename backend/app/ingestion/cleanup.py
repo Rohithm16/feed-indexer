@@ -44,6 +44,36 @@ def delete_orphaned_events(db: Session) -> int:
     return deleted
 
 
+def enforce_section_caps(db: Session) -> int:
+    """Global storage-level cap enforcement -- keeps only the top-N events
+    per section (by importance_score) in the database at all, independent
+    of any one user's preferences. This is what actually saves storage and
+    Gemini API calls: run this BEFORE the Gemini-analysis pass in the
+    pipeline, and events that wouldn't make the cut for their section are
+    deleted outright rather than analyzed and stored only to be pushed out
+    later. Critical events are exempt -- no cap.
+    """
+    from app.ranking.ranker import SECTION_CAPS, classify_event_bucket
+
+    events = db.query(Event).filter(Event.title.isnot(None)).all()
+    buckets: dict[str, list[Event]] = {}
+    for event in events:
+        if event.is_critical:
+            continue
+        buckets.setdefault(classify_event_bucket(event), []).append(event)
+
+    deleted = 0
+    for bucket, bucket_events in buckets.items():
+        cap = SECTION_CAPS["national"] if bucket.startswith("national:") else SECTION_CAPS.get(bucket, SECTION_CAPS["world"])
+        bucket_events.sort(key=lambda e: (e.importance_score or 0), reverse=True)
+        for event in bucket_events[cap:]:
+            db.delete(event)
+            deleted += 1
+
+    db.flush()
+    return deleted
+
+
 def cleanup_stale_data(db: Session) -> dict[str, int]:
     deleted_articles = delete_expired_articles(db)
     deleted_events = delete_orphaned_events(db)

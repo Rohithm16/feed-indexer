@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user_optional
+from app.constants import DEFAULT_COUNTRIES
 from app.database import get_db
 from app.models.event import Event
 from app.models.user import User
@@ -25,7 +26,12 @@ def _get_preferences(db: Session, user: User | None) -> UserPreferences | None:
         return None
     if user.preferences:
         return user.preferences
-    prefs = UserPreferences(user_id=user.id, preferred_topics=[], trusted_publishers=[], country="us", city=None)
+    prefs = UserPreferences(
+        user_id=user.id,
+        preferred_topics=[],
+        trusted_publishers=[],
+        countries=list(DEFAULT_COUNTRIES),
+    )
     db.add(prefs)
     db.flush()
     return prefs
@@ -35,9 +41,7 @@ def _primary_article(event: Event):
     """Pick the representative article for an event's "Read original" link.
 
     Best source tier first (tier 1 = most credible), then most recent
-    within that tier. Previously sorted oldest-first with tier as a
-    secondary key, so a slower tier-2 outlet that happened to publish
-    first would win over a tier-1 wire story published later the same day.
+    within that tier.
     """
     articles = event.articles or []
     if not articles:
@@ -59,6 +63,7 @@ def _event_to_card(event: Event, reason: str = "") -> EventCard:
         summary=event.summary,
         why_it_matters=event.why_it_matters,
         category=event.category,
+        country=event.country,
         tags=event.tags or [],
         importance_score=event.importance_score or 0.0,
         is_critical=event.is_critical or False,
@@ -82,6 +87,7 @@ def _event_to_detail(event: Event, reason: str = "") -> EventDetail:
         summary=event.summary,
         why_it_matters=event.why_it_matters,
         category=event.category,
+        country=event.country,
         tags=event.tags or [],
         importance_score=event.importance_score or 0.0,
         is_critical=event.is_critical or False,
@@ -108,12 +114,13 @@ def get_sectioned_feed(db: Session = Depends(get_db), user: User | None = Depend
     sectioned = section_events(events, prefs)
     return SectionedFeed(
         critical=[_event_to_card(e, r) for e, r in sectioned["critical"]],
-        local=[_event_to_card(e, r) for e, r in sectioned["local"]],
-        national=[_event_to_card(e, r) for e, r in sectioned["national"]],
+        national={
+            country: [_event_to_card(e, r) for e, r in pairs]
+            for country, pairs in sectioned["national"].items()
+        },
         world=[_event_to_card(e, r) for e, r in sectioned["world"]],
-        technology=[_event_to_card(e, r) for e, r in sectioned["technology"]],
-        business=[_event_to_card(e, r) for e, r in sectioned["business"]],
-        science=[_event_to_card(e, r) for e, r in sectioned["science"]],
+        tech_science=[_event_to_card(e, r) for e, r in sectioned["tech_science"]],
+        business_finance=[_event_to_card(e, r) for e, r in sectioned["business_finance"]],
     )
 
 

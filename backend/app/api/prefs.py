@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
+from app.constants import DEFAULT_COUNTRIES
 from app.database import get_db
 from app.models.user import User
 from app.models.user_prefs import UserPreferences
@@ -15,7 +16,12 @@ router = APIRouter(prefix="/api/preferences", tags=["preferences"])
 def _get_or_create_prefs(db: Session, user: User) -> UserPreferences:
     if user.preferences:
         return user.preferences
-    prefs = UserPreferences(user_id=user.id, preferred_topics=[], trusted_publishers=[], country="us", city=None)
+    prefs = UserPreferences(
+        user_id=user.id,
+        preferred_topics=[],
+        trusted_publishers=[],
+        countries=list(DEFAULT_COUNTRIES),
+    )
     db.add(prefs)
     db.flush()
     return prefs
@@ -31,8 +37,7 @@ def update_preferences(data: PreferencesIn, db: Session = Depends(get_db), user:
     prefs = _get_or_create_prefs(db, user)
     prefs.preferred_topics = data.preferred_topics
     prefs.trusted_publishers = data.trusted_publishers
-    prefs.country = data.country
-    prefs.city = data.city
+    prefs.countries = data.countries
     db.commit()
     db.refresh(prefs)
     return prefs

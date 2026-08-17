@@ -24,11 +24,19 @@ class FeedInfo:
     - url: the RSS feed URL
     - category: which section this belongs to (world/technology/business/science/national/health/politics)
     - country: "us", "uk", "in", "world", etc.
+    - tier: source credibility, 1 = wire service / major public-service
+      broadcaster (BBC, AP, NPR, PBS, DW, Guardian), 2 = solid reputable
+      but commercial/trade-focused, 3 = community-curated aggregator, not
+      a newsroom (Hacker News). Was previously never set anywhere in the
+      pipeline, so every article defaulted to the same tier regardless of
+      source -- this is what actually differentiates them now, feeding
+      evidence-multiplier and primary-source-selection logic downstream.
     """
     name: str
     url: str
     category: str
     country: str = "world"
+    tier: int = 2
 
 
 class NewsProvider(ABC):

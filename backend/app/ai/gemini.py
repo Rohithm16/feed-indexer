@@ -30,7 +30,7 @@ client = genai.Client(api_key=settings.gemini_api_key)
 # Categories Gemini can assign
 VALID_CATEGORIES = {
     "world", "national", "technology", "business",
-    "science", "politics", "finance", "health",
+    "science", "politics", "finance",
 }
 
 # These keywords in Gemini's output indicate a critical event
@@ -69,7 +69,7 @@ Use this exact structure:
   "why_it_matters": "1-2 sentences on the broader significance for society or the reader",
   "importance_score": <integer 0-100 based on: scale of impact, lives affected, geopolitical significance, policy implications. 90-100=global crisis, 70-89=major national event, 50-69=significant regional, 30-49=notable, 0-29=routine>,
   "is_critical": <true ONLY if event involves: {CRITICAL_CATEGORIES_HINT}>,
-  "category": "<one of: world, national, technology, business, science, politics, finance, health>",
+  "category": "<one of: world, national, technology, business, science, politics, finance>",
   "tags": ["tag1", "tag2", "tag3"]
 }}"""
 

@@ -5,7 +5,6 @@ Configured via FETCH_INTERVAL_MINUTES in .env (default: 30 minutes).
 Also provides a manual trigger endpoint.
 """
 
-import asyncio
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,13 +16,6 @@ logger = logging.getLogger(__name__)
 
 # Single scheduler instance shared by the whole app
 scheduler = AsyncIOScheduler()
-
-
-def _run_ingestion_sync():
-    """
-    APScheduler calls synchronous functions. We bridge to async here.
-    """
-    asyncio.get_event_loop().run_until_complete(run_ingestion())
 
 
 async def start_scheduler():

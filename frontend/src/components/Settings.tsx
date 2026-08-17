@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import type { UserPreferences } from '../types';
+import type { CountryCode, UserPreferences } from '../types';
 import { getPreferences, updatePreferences } from '../api';
-import { DEFAULT_PREFS } from '../types';
+import { DEFAULT_PREFS, SUPPORTED_COUNTRIES, COUNTRY_INFO } from '../types';
 import styles from '../styles/Settings.module.css';
 import { useTimeOfDay } from '../hooks/useTimeOfDay';
 
@@ -10,12 +10,14 @@ interface Props {
   onSave?: () => void;
 }
 
+// "Health" removed (folds into World now), Technology + Science merged,
+// Business renamed to Business & Finance -- matches the backend's
+// current section names.
 const SETTINGS_SECTIONS: Array<{ key: string; label: string }> = [
-  { key: 'general', label: 'General' },
-  { key: 'technology', label: 'Technology' },
-  { key: 'business', label: 'Business' },
-  { key: 'science', label: 'Science' },
-  { key: 'health', label: 'Health' },
+  { key: 'national', label: 'National' },
+  { key: 'world', label: 'World' },
+  { key: 'tech_science', label: 'Tech & Science' },
+  { key: 'business_finance', label: 'Business & Finance' },
   { key: 'entertainment', label: 'Entertainment' },
   { key: 'sports', label: 'Sports' },
 ];
@@ -39,6 +41,16 @@ const Settings = ({ onClose, onSave }: Props) => {
         ? prev.preferred_topics.filter((t) => t !== topic)
         : [...prev.preferred_topics, topic],
     }));
+  };
+
+  const toggleCountry = (code: CountryCode) => {
+    setPrefs((prev) => {
+      const has = prev.countries.includes(code);
+      const next = has ? prev.countries.filter((c) => c !== code) : [...prev.countries, code];
+      // At least one country must stay selected -- falling back to the
+      // default rather than letting the user save an empty selection.
+      return { ...prev, countries: next.length > 0 ? next : DEFAULT_PREFS.countries };
+    });
   };
 
   const handleSave = async () => {
@@ -65,27 +77,20 @@ const Settings = ({ onClose, onSave }: Props) => {
           </h2>
 
           <div className={styles.group}>
-            <label htmlFor="country">Country</label>
-            <p className={styles.hint}>Filter stories relevant to your region.</p>
-            <input
-              id="country"
-              type="text"
-              value={prefs.country}
-              onChange={(e) => setPrefs((prev) => ({ ...prev, country: e.target.value }))}
-              placeholder="e.g. us"
-            />
-          </div>
-
-          <div className={styles.group}>
-            <label htmlFor="city">City</label>
-            <p className={styles.hint}>Local news near you.</p>
-            <input
-              id="city"
-              type="text"
-              value={prefs.city}
-              onChange={(e) => setPrefs((prev) => ({ ...prev, city: e.target.value }))}
-              placeholder="e.g. New York"
-            />
+            <label>Country</label>
+            <p className={styles.hint}>Choose one or both. Their stories appear under National.</p>
+            <div className={styles.pillGroup}>
+              {SUPPORTED_COUNTRIES.map((code) => (
+                <button
+                  key={code}
+                  className={`${styles.pill} ${prefs.countries.includes(code) ? styles.pillSelected : ''}`}
+                  onClick={() => toggleCountry(code)}
+                >
+                  <span style={{ marginRight: '6px' }}>{COUNTRY_INFO[code].flag}</span>
+                  {COUNTRY_INFO[code].name}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className={styles.group}>

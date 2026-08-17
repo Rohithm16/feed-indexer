@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Gemini is used only for language generation after local scoring.
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash-lite"
-    gemini_min_importance_score: float = 55.0
+    gemini_min_importance_score: float = 1.0
     gemini_max_concurrency: int = 2
     gemini_max_retries: int = 3
 

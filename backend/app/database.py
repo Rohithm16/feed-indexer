@@ -91,7 +91,7 @@ def run_lightweight_migrations() -> None:
             "article_count": "INTEGER DEFAULT 1",
         },
     )
-    _add_missing_columns("user_preferences", {"user_id": "INTEGER"})
+    _add_missing_columns("user_preferences", {"user_id": "INTEGER", "countries": "JSON"})
 
     _create_index("CREATE INDEX IF NOT EXISTS ix_articles_published_at ON articles (published_at)")
     _create_index("CREATE INDEX IF NOT EXISTS ix_articles_event_id ON articles (event_id)")

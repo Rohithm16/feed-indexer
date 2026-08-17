@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getFeed } from './api';
-import type { FeedData, Event } from './types';
+import type { FeedData, Event, CountryCode } from './types';
+import { COUNTRY_INFO } from './types';
 import Header from './components/Header';
 import Section from './components/Section';
 import EventDetailModal from './components/EventDetailModal';
@@ -8,22 +9,48 @@ import styles from './styles/App.module.css';
 import { useTimeOfDay } from './hooks/useTimeOfDay';
 import { getTimePeriodLabel } from './utils/timeOfDay';
 
-const SECTIONS: Array<{ key: keyof FeedData; label: string }> = [
+// National is rendered separately below (grouped by country); these are
+// the remaining flat sections, in display order.
+const SECTIONS: Array<{ key: 'critical' | 'world' | 'tech_science' | 'business_finance'; label: string }> = [
   { key: 'critical', label: 'Breaking & Critical' },
-  { key: 'local', label: 'Local' },
-  { key: 'national', label: 'National' },
-  { key: 'world', label: 'World' },
-  { key: 'technology', label: 'Technology' },
-  { key: 'business', label: 'Business' },
-  { key: 'science', label: 'Science' },
 ];
+const SECTIONS_AFTER_NATIONAL: Array<{ key: 'world' | 'tech_science' | 'business_finance'; label: string }> = [
+  { key: 'world', label: 'World' },
+  { key: 'tech_science', label: 'Tech & Science' },
+  { key: 'business_finance', label: 'Business & Finance' },
+];
+
+function countAllEvents(feed: FeedData | null): number {
+  if (!feed) return 0;
+  const flatSections = feed.critical.length + feed.world.length + feed.tech_science.length + feed.business_finance.length;
+  const nationalCount = Object.values(feed.national).reduce((sum, events) => sum + events.length, 0);
+  return flatSections + nationalCount;
+}
+
+function formatUpdatedLabel(lastFetchedAt: Date | null, now: Date): string {
+  if (!lastFetchedAt) return 'Not updated yet.';
+  const diffMinutes = Math.max(0, Math.round((now.getTime() - lastFetchedAt.getTime()) / 60000));
+  if (diffMinutes < 1) return 'Updated just now.';
+  if (diffMinutes === 1) return 'Updated 1 minute ago.';
+  if (diffMinutes < 60) return `Updated ${diffMinutes} minutes ago.`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours === 1) return 'Updated 1 hour ago.';
+  return `Updated ${diffHours} hours ago.`;
+}
 
 function App() {
   const [feed, setFeed] = useState<FeedData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
+  const [now, setNow] = useState<Date>(new Date());
   const timePeriod = useTimeOfDay();
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const loadFeed = useCallback(async () => {
     setLoading(true);
@@ -31,6 +58,7 @@ function App() {
     try {
       const data = await getFeed();
       setFeed(data);
+      setLastFetchedAt(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load feed');
     } finally {
@@ -61,7 +89,7 @@ function App() {
       <main className={styles.page}>
         <section className={styles.hero} data-time={timePeriod}>
           <div className={styles.content}>
-            <p className={styles.title}>Updated x minutes ago. </p>
+            <p className={styles.title}>{formatUpdatedLabel(lastFetchedAt, now)}</p>
             <h1 className={styles.headline}>{getTimePeriodLabel(timePeriod)}</h1>
             <p className={styles.description}>
               Stories grouped by importance, location, and topic. 
@@ -69,7 +97,7 @@ function App() {
           </div>
           <div className={styles.stats}>
             <div className={styles.stat}>
-              <div className={styles.count}>{feed ? Object.values(feed).flat().length : 0}</div>
+              <div className={styles.count}>{countAllEvents(feed)}</div>
               <div className={styles.label}>events tracked</div>
             </div>
             <div className={styles.stat}>
@@ -87,9 +115,24 @@ function App() {
             <p style={{ marginTop: 'var(--space-2)' }}>Refresh to pull the latest stories.</p>
           </div>
         )}
-        {!loading && !error && feed && SECTIONS.map(({ key, label }) => (
-          <Section key={key} title={label} events={feed[key]} onEventClick={openEvent} />
-        ))}
+        {!loading && !error && feed && (
+          <>
+            {SECTIONS.map(({ key, label }) => (
+              <Section key={key} title={label} events={feed[key]} onEventClick={openEvent} />
+            ))}
+            {(Object.entries(feed.national) as Array<[CountryCode, Event[]]>).map(([code, events]) => (
+              <Section
+                key={`national-${code}`}
+                title={`${COUNTRY_INFO[code]?.flag ?? ''} National — ${COUNTRY_INFO[code]?.name ?? code}`}
+                events={events}
+                onEventClick={openEvent}
+              />
+            ))}
+            {SECTIONS_AFTER_NATIONAL.map(({ key, label }) => (
+              <Section key={key} title={label} events={feed[key]} onEventClick={openEvent} />
+            ))}
+          </>
+        )}
       </main>
       <EventDetailModal event={selectedEvent} open={!!selectedEvent} onClose={closeEvent} />
     </div>
