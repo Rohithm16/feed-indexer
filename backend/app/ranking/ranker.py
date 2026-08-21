@@ -46,6 +46,22 @@ def classify_event_bucket(event: Event) -> str:
     return "world"
 
 
+# The four filterable sections, matching Settings.tsx pill keys exactly.
+# Critical bypasses this filter entirely -- breaking news always shows
+# regardless of topic preferences.
+_FILTERABLE_SECTIONS = {"national", "world", "tech_science", "business_finance"}
+
+
+def _active_sections(prefs: UserPreferences | None) -> set[str]:
+    if prefs and prefs.preferred_topics:
+        selected = {t for t in prefs.preferred_topics if t in _FILTERABLE_SECTIONS}
+        if selected:
+            return selected
+    # No preferences set (or none of them matched a real section) -> show
+    # everything. Only an explicit, valid selection narrows the feed.
+    return set(_FILTERABLE_SECTIONS)
+
+
 def _selected_countries(prefs: UserPreferences | None) -> list[str]:
     if prefs:
         countries = [c for c in (getattr(prefs, "countries", None) or []) if c in SUPPORTED_COUNTRIES]
@@ -61,10 +77,6 @@ def _compute_user_interest_score(event: Event, prefs: UserPreferences | None) ->
 
     bonus = 0.0
     reasons: list[str] = []
-
-    if event.category and event.category in (prefs.preferred_topics or []):
-        bonus += 18.0
-        reasons.append(f"Matches your interest in {event.category}")
 
     article_sources = {a.source_name for a in (event.articles or [])}
     trusted = set(prefs.trusted_publishers or [])
@@ -166,5 +178,17 @@ def section_events(
     sections["world"] = _sorted_capped(sections["world"], SECTION_CAPS["world"])
     sections["tech_science"] = _sorted_capped(sections["tech_science"], SECTION_CAPS["tech_science"])
     sections["business_finance"] = _sorted_capped(sections["business_finance"], SECTION_CAPS["business_finance"])
+
+    # Real filtering: only sections the user actually selected in Settings
+    # show anything. Critical is exempt -- always shown regardless.
+    active = _active_sections(prefs)
+    if "national" not in active:
+        sections["national"] = {country: [] for country in selected_countries}
+    if "world" not in active:
+        sections["world"] = []
+    if "tech_science" not in active:
+        sections["tech_science"] = []
+    if "business_finance" not in active:
+        sections["business_finance"] = []
 
     return sections

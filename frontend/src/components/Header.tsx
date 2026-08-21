@@ -14,9 +14,10 @@ import AuthPage from './AuthPage';
 interface Props {
   onIngest: () => void;
   ingesting: boolean;
+  onAuthOrPrefsChange: () => void;
 }
 
-const Header: React.FC<Props> = ({ onIngest, ingesting }) => {
+const Header: React.FC<Props> = ({ onIngest, ingesting, onAuthOrPrefsChange }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [user, setUser] = useState<{ id: number; email: string } | null>(null);
@@ -29,9 +30,15 @@ const Header: React.FC<Props> = ({ onIngest, ingesting }) => {
     try {
       await logoutUser();
       setUser(null);
+      onAuthOrPrefsChange();
     } catch (error) {
       console.error('Logout failed:', error);
     }
+  };
+
+  const handleAuthenticated = (authedUser: { id: number; email: string }) => {
+    setUser(authedUser);
+    onAuthOrPrefsChange();
   };
 
   return (
@@ -93,7 +100,7 @@ const Header: React.FC<Props> = ({ onIngest, ingesting }) => {
           <div className="panel">
             <Settings
               onClose={() => setSettingsOpen(false)}
-              onSave={() => {}}
+              onSave={onAuthOrPrefsChange}
             />
           </div>
         </>
@@ -102,7 +109,7 @@ const Header: React.FC<Props> = ({ onIngest, ingesting }) => {
       {authOpen && (
         <AuthPage
           onClose={() => setAuthOpen(false)}
-          onAuthenticated={setUser}
+          onAuthenticated={handleAuthenticated}
         />
       )}
     </>

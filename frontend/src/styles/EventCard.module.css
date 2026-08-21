@@ -1,7 +1,7 @@
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-lg);
   padding: var(--space-5);
   cursor: pointer;
   transition: box-shadow var(--transition-mid), border-color var(--transition-mid), transform var(--transition-fast);
@@ -14,21 +14,20 @@
 }
 
 .card:hover {
-  box-shadow: var(--shadow-card-hover);
-  border-color: var(--color-border-hover);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-card-hover), 0 0 0 1px color-mix(in srgb, var(--card-accent) 25%, transparent);
+  border-color: color-mix(in srgb, var(--card-accent) 35%, var(--color-border));
+  transform: translateY(-2px);
 }
 
 .card::before {
   content: '';
   position: absolute;
   left: 0;
+  right: 0;
   top: 0;
-  bottom: 0;
-  width: 3px;
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
-  background: var(--card-accent, var(--color-accent));
-  opacity: 0.7;
+  height: 4px;
+  background: linear-gradient(90deg, var(--card-accent), color-mix(in srgb, var(--card-accent) 40%, transparent));
+  opacity: 0.85;
   transition: opacity var(--transition-fast);
 }
 
@@ -37,84 +36,39 @@
 }
 
 .critical {
-  background: linear-gradient(135deg, rgba(220, 38, 38, 0.04), var(--color-surface));
-  border-color: rgba(220, 38, 38, 0.25);
-  --card-accent: var(--color-critical);
-}
-
-.critical:hover {
-  border-color: rgba(220, 38, 38, 0.45);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--color-critical) 5%, var(--color-surface)), var(--color-surface) 60%);
+  border-color: color-mix(in srgb, var(--color-critical) 22%, var(--color-border));
 }
 
 .meta {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
 }
 
-.ring {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-}
-
-.ring svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-.ringTrack {
-  stroke: var(--color-border);
-}
-
-.ringProgress {
-  transition: stroke-dashoffset var(--transition-mid);
-}
-
-.ringHigh .ringProgress {
-  stroke: var(--color-critical);
-}
-
-.ringMid .ringProgress {
-  stroke: #d97706;
-}
-
-.ringLow .ringProgress {
-  stroke: var(--color-accent);
-}
-
-.ringNumber {
-  position: relative;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  line-height: 1;
+.metaText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
 }
 
 .timeAgo {
-  padding: 3px var(--space-3);
-  border-radius: var(--radius-round);
-  background: var(--color-surface-2);
-  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 500;
 }
 
 .title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.4;
   color: var(--color-text-primary);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
   letter-spacing: -0.2px;
 }
 
@@ -122,11 +76,26 @@
   font-size: 18px;
 }
 
+.block {
+  margin-bottom: var(--space-3);
+}
+
+.blockLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--card-accent) 70%, var(--color-text-muted));
+  margin-bottom: 6px;
+}
+
 .summary {
   font-size: 14px;
   color: var(--color-text-secondary);
   line-height: 1.65;
-  margin-bottom: var(--space-3);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -135,20 +104,23 @@
 
 .why {
   font-size: 13px;
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--card-accent) 6%, var(--gray-0));
+  border-radius: var(--radius-round);
+  border-left: 3px solid var(--card-accent);
+  margin-bottom: var(--space-3);
+  flex: 1;
+}
+
+.whyText {
   color: var(--color-text-secondary);
   line-height: 1.6;
-  padding: var(--space-3) var(--space-4);
-  background: var(--gray-0);
-  border-radius: var(--radius-round);
-  border-left: 3px solid var(--color-accent);
-  margin-bottom: var(--space-3);
-  font-style: italic;
-  flex: 1;
 }
 
 .footer {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
   font-size: 12px;
   color: var(--color-text-muted);
@@ -156,4 +128,19 @@
   margin-top: auto;
   padding-top: var(--space-3);
   border-top: 1px solid var(--gray-1);
+}
+
+.footerItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.readLink {
+  font-weight: 600;
+  color: var(--card-accent);
+}
+
+.readLink:hover {
+  color: color-mix(in srgb, var(--card-accent) 80%, black);
 }

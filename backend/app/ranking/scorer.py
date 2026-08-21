@@ -113,7 +113,7 @@ _QUOTE_LEAD_RE = re.compile(r"^\s*[\"'\u2018\u201c]")
 
 EVENT_TYPE_KEYWORDS = {
     "conflict": {"war", "strike", "attack", "military", "troops", "conflict", "invasion"},
-    "disaster": {"flood", "earthquake", "wildfire", "storm", "cyclone", "disaster", "hurricane"},
+    "disaster": {"flood", "earthquake", "wildfire", "storm", "cyclone", "disaster", "hurricane", "drought"},
     "terrorism": {"terror", "bomb", "shooting", "bombing"},
     "election": {"election", "vote", "poll", "campaign", "midterm", "ballot"},
     "government_policy": {"policy", "bill", "budget", "law", "government", "ministry", "regulation"},

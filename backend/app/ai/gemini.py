@@ -15,6 +15,7 @@ The response is strict JSON — no markdown wrappers.
 
 import json
 import logging
+import time
 from typing import Optional
 
 from google import genai
@@ -74,10 +75,23 @@ Use this exact structure:
 }}"""
 
 
+def _looks_like_rate_limit(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in ("429", "resource_exhausted", "rate limit", "quota"))
+
+
 def analyze_event(articles: list[Article]) -> Optional[dict]:
     """
     Call Gemini to analyze a clustered event.
-    Returns a dict with the analysis fields, or None if the call fails.
+    Returns a dict with the analysis fields, or None if every retry fails.
+
+    Retries with backoff on failure -- previously any single transient
+    error (most commonly a rate limit, since lowering
+    gemini_min_importance_score means far more events now qualify for a
+    Gemini call per ingestion run) caused that event to silently keep
+    just its raw article title with no summary, permanently, until its
+    content changed enough to trigger another attempt. gemini_max_retries
+    was already a config setting but was never actually used anywhere.
     """
     if not settings.gemini_api_key:
         logger.warning("GEMINI_API_KEY not set — skipping AI analysis")
@@ -87,44 +101,60 @@ def analyze_event(articles: list[Article]) -> Optional[dict]:
         return None
 
     prompt = _build_prompt(articles)
+    max_attempts = max(1, settings.gemini_max_retries)
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2
-            ),
-        )
-        if not response.text:
-            logger.error("Gemini returned an empty response.")
-            return None
-        raw = response.text.strip()
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.2
+                ),
+            )
+            if not response.text:
+                logger.error("Gemini returned an empty response.")
+                return None
+            raw = response.text.strip()
 
-        # Strip any accidental markdown code fences
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
+            # Strip any accidental markdown code fences
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
 
-        data = json.loads(raw)
+            data = json.loads(raw)
 
-        # Sanitize category
-        if data.get("category") not in VALID_CATEGORIES:
-            data["category"] = articles[0].category or "world"
+            # Sanitize category
+            if data.get("category") not in VALID_CATEGORIES:
+                data["category"] = articles[0].category or "world"
 
-        # Ensure importance_score is in range
-        score = int(data.get("importance_score", 50))
-        data["importance_score"] = max(0, min(100, score))
+            # Ensure importance_score is in range
+            score = int(data.get("importance_score", 50))
+            data["importance_score"] = max(0, min(100, score))
 
-        return data
+            return data
 
-    except json.JSONDecodeError as exc:
-        logger.error(f"Gemini returned invalid JSON: {exc}")
-        return None
-    except Exception as exc:
-        logger.error(f"Gemini API error: {exc}")
-        return None
+        except json.JSONDecodeError as exc:
+            logger.warning(f"Gemini returned invalid JSON (attempt {attempt}/{max_attempts}): {exc}")
+            if attempt == max_attempts:
+                logger.error(f"Gemini returned invalid JSON on final attempt, giving up: {exc}")
+                return None
+            time.sleep(1.0)
+
+        except Exception as exc:
+            rate_limited = _looks_like_rate_limit(exc)
+            logger.warning(
+                f"Gemini API error (attempt {attempt}/{max_attempts}, rate_limited={rate_limited}): {exc}"
+            )
+            if attempt == max_attempts:
+                logger.error(f"Gemini API error, giving up after {max_attempts} attempts: {exc}")
+                return None
+            # Rate limits get real exponential backoff; other transient
+            # errors (network blips, etc.) get a short flat retry delay.
+            time.sleep(min(30.0, 2.0 ** attempt) if rate_limited else 1.5)
+
+    return None
 
 
 def apply_analysis_to_event(event, analysis: dict) -> None:

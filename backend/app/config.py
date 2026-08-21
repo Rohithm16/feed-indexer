@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     gemini_min_importance_score: float = 1.0
     gemini_max_concurrency: int = 2
     gemini_max_retries: int = 3
+    # Fixed delay between successive Gemini calls within one ingestion run.
+    # Complements the retry-with-backoff in gemini.analyze_event: this
+    # reduces how often a rate limit gets hit in the first place, rather
+    # than just recovering after the fact.
+    gemini_call_pacing_seconds: float = 1.5
 
     # Database
     database_url: str = "sqlite:///./feed_indexer.db"

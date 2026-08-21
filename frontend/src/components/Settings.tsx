@@ -12,14 +12,15 @@ interface Props {
 
 // "Health" removed (folds into World now), Technology + Science merged,
 // Business renamed to Business & Finance -- matches the backend's
-// current section names.
+// current section names exactly (these keys are matched literally
+// against the section names on the backend for real filtering, not just
+// a ranking nudge -- unselected sections are hidden from the feed
+// entirely, so don't add a key here that isn't a real backend section).
 const SETTINGS_SECTIONS: Array<{ key: string; label: string }> = [
   { key: 'national', label: 'National' },
   { key: 'world', label: 'World' },
   { key: 'tech_science', label: 'Tech & Science' },
   { key: 'business_finance', label: 'Business & Finance' },
-  { key: 'entertainment', label: 'Entertainment' },
-  { key: 'sports', label: 'Sports' },
 ];
 
 const Settings = ({ onClose, onSave }: Props) => {
@@ -95,7 +96,7 @@ const Settings = ({ onClose, onSave }: Props) => {
 
           <div className={styles.group}>
             <label>Preferred topics</label>
-            <p className={styles.hint}>Select topics you care about most.</p>
+            <p className={styles.hint}>Only selected topics appear in your feed. Leave all unselected to see everything.</p>
             <div className={styles.pillGroup}>
               {SETTINGS_SECTIONS.map((topic) => (
                 <button

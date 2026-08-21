@@ -1,4 +1,7 @@
+import { Clock, FileText, Lightbulb, Newspaper } from 'lucide-react';
 import type { Event } from '../types';
+import ScoreRing from './ScoreRing';
+import { ACCENT_VAR, type SectionAccent } from '../accentColors';
 import styles from '../styles/EventCard.module.css';
 
 function timeAgo(iso: string): string {
@@ -11,89 +14,70 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function scoreClass(score: number): string {
-  if (score >= 65) return styles.ringHigh;
-  if (score >= 35) return styles.ringMid;
-  return styles.ringLow;
-}
-
 interface Props {
   event: Event;
-  onClick: (event: Event) => void;
+  onClick: (event: Event, accent: SectionAccent) => void;
+  accent: SectionAccent;
 }
 
-// Importance score as a circular progress ring with the number in the
-// center, built from two stacked SVG circles: a dim full-circle track,
-// and a colored circle whose stroke-dasharray is set to score% of the
-// circumference so it reads as a partial ring.
-const ScoreRing: React.FC<{ score: number }> = ({ score }) => {
-  const clamped = Math.max(0, Math.min(100, score));
-  const radius = 16;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - clamped / 100);
-
-  return (
-    <div className={`${styles.ring} ${scoreClass(clamped)}`} aria-label={`Importance score ${Math.round(clamped)}`}>
-      <svg viewBox="0 0 36 36" width="36" height="36">
-        <circle className={styles.ringTrack} cx="18" cy="18" r={radius} fill="none" strokeWidth="3" />
-        <circle
-          className={styles.ringProgress}
-          cx="18"
-          cy="18"
-          r={radius}
-          fill="none"
-          strokeWidth="3"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform="rotate(-90 18 18)"
-        />
-      </svg>
-      <span className={styles.ringNumber}>{Math.round(clamped)}</span>
-    </div>
-  );
-};
-
-const EventCard: React.FC<Props> = ({ event, onClick }) => {
+const EventCard: React.FC<Props> = ({ event, onClick, accent }) => {
   const score = event.importance_score ?? 0;
   const isCritical = event.is_critical;
+  const cardAccent: SectionAccent = isCritical ? 'critical' : accent;
 
   const handleClick = () => {
-    onClick(event);
+    onClick(event, cardAccent);
   };
 
   return (
     <div
       className={`${styles.card} ${isCritical ? styles.critical : ''}`}
+      style={{ '--card-accent': ACCENT_VAR[cardAccent] } as React.CSSProperties}
       onClick={handleClick}
     >
       <div className={styles.meta}>
-        {isCritical && <span className="badge badge--critical">⚠ Breaking</span>}
         <ScoreRing score={score} />
-        <span className={styles.timeAgo}>{timeAgo(event.last_updated_at)}</span>
+        <div className={styles.metaText}>
+          {isCritical && <span className="badge badge--critical">⚠ Breaking</span>}
+          <span className={styles.timeAgo}>
+            <Clock size={12} />
+            {timeAgo(event.last_updated_at)}
+          </span>
+        </div>
       </div>
 
       <h3 className={styles.title}>{event.title}</h3>
 
       {event.summary && (
-        <p className={styles.summary}>{event.summary}</p>
+        <div className={styles.block}>
+          <span className={styles.blockLabel}>
+            <FileText size={12} /> Summary
+          </span>
+          <p className={styles.summary}>{event.summary}</p>
+        </div>
       )}
 
       {event.why_it_matters && (
         <div className={styles.why}>
-          <span style={{ fontWeight: 600, fontStyle: 'normal' }}>Why it matters </span>
-          {event.why_it_matters}
+          <span className={styles.blockLabel}>
+            <Lightbulb size={12} /> Why it matters
+          </span>
+          <p className={styles.whyText}>{event.why_it_matters}</p>
         </div>
       )}
 
       <div className={styles.footer}>
-        <span>{event.source_count ?? 0} source{event.source_count !== 1 ? 's' : ''}</span>
-        {event.primary_source_name && <span>via {event.primary_source_name}</span>}
+        <span className={styles.footerItem}>
+          <Newspaper size={13} />
+          {event.source_count ?? 0} source{event.source_count !== 1 ? 's' : ''}
+          {event.primary_source_name && ` · via ${event.primary_source_name}`}
+        </span>
         {event.primary_source_url && (
           <a
             href={event.primary_source_url}
             target="_blank"
             rel="noopener noreferrer"
+            className={styles.readLink}
             onClick={(e) => e.stopPropagation()}
           >
             Read original ↗

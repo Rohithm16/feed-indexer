@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -140,6 +141,7 @@ async def run_ingestion() -> dict:
                         db.add(event)
                     else:
                         stats["gemini_failures"] += 1
+                    time.sleep(settings.gemini_call_pacing_seconds)
             db.add(event)
 
         cleanup_stats = cleanup_stale_data(db)

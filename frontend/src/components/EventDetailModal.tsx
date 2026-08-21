@@ -1,18 +1,31 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import styles from '../styles/EventModal.module.css';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Clock, FileText, Lightbulb, Newspaper } from 'lucide-react';
 import { getEventDetail } from '../api';
 import type { Event, EventDetailData } from '../types';
 import { useTimeOfDay } from '../hooks/useTimeOfDay';
+import ScoreRing from './ScoreRing';
+import { ACCENT_VAR, type SectionAccent } from '../accentColors';
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 interface Props {
   event: Event | null;
   open: boolean;
   onClose: () => void;
+  accent?: SectionAccent;
 }
 
-const EventDetailModal: React.FC<Props> = ({ event, open, onClose }) => {
+const EventDetailModal: React.FC<Props> = ({ event, open, onClose, accent = 'world' }) => {
   const [detail, setDetail] = useState<EventDetailData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,16 +81,21 @@ const EventDetailModal: React.FC<Props> = ({ event, open, onClose }) => {
         <div className="overlay" onClick={onClose} />
         <div
           className={`glass-shell ${styles.modal}`}
+          style={{ '--modal-accent': ACCENT_VAR[accent] } as React.CSSProperties}
           onClick={(event) => event.stopPropagation()}
         >
           <div className={styles.header} data-time={timePeriod}>
-            {/* <div className="event-modal__meta">
-              {activeEvent.is_critical && (
-                <span className="badge badge--critical">Breaking</span>
-              )}
-              <span className="event-modal__chip">{activeEvent.category || 'General'}</span>
-              <span className={`badge ${badgeClass(score)}`}>{score}</span>
-              <span className="event-modal__chip">{timeAgo(activeEvent.last_updated_at)}</span>
+            {/* <div className={styles.metaRow}>
+              <ScoreRing score={activeEvent.importance_score ?? 0} size={40} light />
+              <div className={styles.metaText}>
+                {activeEvent.is_critical && (
+                  <span className="badge badge--critical">⚠ Breaking</span>
+                )}
+                <span className={styles.timeAgo}>
+                  <Clock size={12} />
+                  {timeAgo(activeEvent.last_updated_at)}
+                </span>
+              </div>
             </div> */}
             <div className={styles.titleRow}>
               <Dialog.Title className={styles.title}>{activeEvent.title}</Dialog.Title>
@@ -87,20 +105,25 @@ const EventDetailModal: React.FC<Props> = ({ event, open, onClose }) => {
           <div className={styles.body}>
             {activeEvent.summary && (
               <section>
-                <h3 className={styles.sectionTitle}>Summary</h3>
+                <h3 className={styles.sectionTitle}>
+                  <FileText size={13} /> Summary
+                </h3>
                 <p className={styles.text}>{activeEvent.summary}</p>
               </section>
             )}
 
             {activeEvent.why_it_matters && (
               <section className={styles.highlight}>
-                <h3 className={styles.sectionTitle}>Why it matters</h3>
+                <h3 className={styles.sectionTitle}>
+                  <Lightbulb size={13} /> Why it matters
+                </h3>
                 <p className={styles.text}>{activeEvent.why_it_matters}</p>
               </section>
             )}
 
             <section>
               <h3 className={styles.sectionTitle}>
+                <Newspaper size={13} />
                 Sources
                 <span className={styles.sectionCount}>{activeEvent.source_count ?? 0}</span>
               </h3>

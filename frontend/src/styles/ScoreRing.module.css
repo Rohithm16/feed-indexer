@@ -1,0 +1,49 @@
+.ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.08));
+}
+
+.ring svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.ringTrack {
+  stroke: var(--color-border);
+}
+
+.ringProgress {
+  transition: stroke-dashoffset var(--transition-mid);
+}
+
+.ringHigh .ringProgress {
+  stroke: var(--color-critical);
+}
+
+.ringMid .ringProgress {
+  stroke: #d97706;
+}
+
+.ringLow .ringProgress {
+  stroke: var(--color-accent);
+}
+
+.ringNumber {
+  position: relative;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.light .ringTrack {
+  stroke: rgba(255, 255, 255, 0.28);
+}
+
+.light .ringNumber {
+  color: #fff;
+}

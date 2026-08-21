@@ -252,9 +252,21 @@ def _agreement_score(
     # events. A hard penalty here was the confirmed cause of a real
     # earthquake story failing to dedup: it dropped an otherwise-strong
     # match below threshold purely because of inconsistent feed tagging.
-    # Country is more reliable (two stories about disasters in different
-    # countries really are different events), so that penalty stays.
-    if article.country and event.country and article.country != event.country:
+    #
+    # Country has the same problem: "world" isn't a specific claim about
+    # location, it's a generic outlet-desk tag (a Guardian World-desk
+    # story about a Hawaii hurricane is still tagged country="world",
+    # while PBS's Nation feed tags the same storm country="us"). Treating
+    # "world" as if it definitively conflicts with "us" caused a real
+    # Hurricane Lala story to be duplicated across World and National.
+    # Only penalize when BOTH sides made a specific, differing claim.
+    if (
+        article.country
+        and event.country
+        and article.country != event.country
+        and article.country != "world"
+        and event.country != "world"
+    ):
         score *= 0.3
 
     return score

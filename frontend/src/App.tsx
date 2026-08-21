@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { AlertTriangle, Globe2, Cpu, TrendingUp } from 'lucide-react';
 import { getFeed } from './api';
 import type { FeedData, Event, CountryCode } from './types';
+import type { SectionAccent } from './accentColors';
 import { COUNTRY_INFO } from './types';
 import Header from './components/Header';
 import Section from './components/Section';
@@ -14,10 +16,10 @@ import { getTimePeriodLabel } from './utils/timeOfDay';
 const SECTIONS: Array<{ key: 'critical' | 'world' | 'tech_science' | 'business_finance'; label: string }> = [
   { key: 'critical', label: 'Breaking & Critical' },
 ];
-const SECTIONS_AFTER_NATIONAL: Array<{ key: 'world' | 'tech_science' | 'business_finance'; label: string }> = [
-  { key: 'world', label: 'World' },
-  { key: 'tech_science', label: 'Tech & Science' },
-  { key: 'business_finance', label: 'Business & Finance' },
+const SECTIONS_AFTER_NATIONAL: Array<{ key: 'world' | 'tech_science' | 'business_finance'; label: string; icon: React.ReactNode }> = [
+  { key: 'world', label: 'World', icon: <Globe2 size={15} /> },
+  { key: 'tech_science', label: 'Tech & Science', icon: <Cpu size={15} /> },
+  { key: 'business_finance', label: 'Business & Finance', icon: <TrendingUp size={15} /> },
 ];
 
 function countAllEvents(feed: FeedData | null): number {
@@ -43,6 +45,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedAccent, setSelectedAccent] = useState<SectionAccent>('world');
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
   const [now, setNow] = useState<Date>(new Date());
   const timePeriod = useTimeOfDay();
@@ -76,16 +79,30 @@ function App() {
     };
   }, [loadFeed]);
 
+  useEffect(() => {
+    // Backend ingests roughly hourly; polling every 5 minutes means new
+    // stories show up soon after each ingestion cycle without the user
+    // ever needing to hit refresh manually. Previously the "Updated X
+    // ago" label just kept aging against the same stale fetch forever.
+    const interval = window.setInterval(() => {
+      void loadFeed();
+    }, 5 * 60_000);
+    return () => window.clearInterval(interval);
+  }, [loadFeed]);
+
   const handleIngest = async () => {
     await loadFeed();
   };
 
-  const openEvent = (event: Event) => setSelectedEvent(event);
+  const openEvent = (event: Event, accent: SectionAccent) => {
+    setSelectedEvent(event);
+    setSelectedAccent(accent);
+  };
   const closeEvent = () => setSelectedEvent(null);
 
   return (
     <div className={styles.shell}>
-      <Header onIngest={handleIngest} ingesting={loading} />
+      <Header onIngest={handleIngest} ingesting={loading} onAuthOrPrefsChange={loadFeed} />
       <main className={styles.page}>
         <section className={styles.hero} data-time={timePeriod}>
           <div className={styles.content}>
@@ -118,7 +135,14 @@ function App() {
         {!loading && !error && feed && (
           <>
             {SECTIONS.map(({ key, label }) => (
-              <Section key={key} title={label} events={feed[key]} onEventClick={openEvent} />
+              <Section
+                key={key}
+                title={label}
+                events={feed[key]}
+                onEventClick={openEvent}
+                icon={<AlertTriangle size={15} />}
+                accent="critical"
+              />
             ))}
             {(Object.entries(feed.national) as Array<[CountryCode, Event[]]>).map(([code, events]) => (
               <Section
@@ -126,15 +150,16 @@ function App() {
                 title={`${COUNTRY_INFO[code]?.flag ?? ''} National — ${COUNTRY_INFO[code]?.name ?? code}`}
                 events={events}
                 onEventClick={openEvent}
+                accent="national"
               />
             ))}
-            {SECTIONS_AFTER_NATIONAL.map(({ key, label }) => (
-              <Section key={key} title={label} events={feed[key]} onEventClick={openEvent} />
+            {SECTIONS_AFTER_NATIONAL.map(({ key, label, icon }) => (
+              <Section key={key} title={label} events={feed[key]} onEventClick={openEvent} icon={icon} accent={key === 'world' ? 'world' : key === 'tech_science' ? 'techScience' : 'businessFinance'} />
             ))}
           </>
         )}
       </main>
-      <EventDetailModal event={selectedEvent} open={!!selectedEvent} onClose={closeEvent} />
+      <EventDetailModal event={selectedEvent} open={!!selectedEvent} onClose={closeEvent} accent={selectedAccent} />
     </div>
   );
 }
